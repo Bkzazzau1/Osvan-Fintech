@@ -1,0 +1,75 @@
+name: osvan_app
+description: Osvan fintech frontend
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Core
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.8
+  uuid: ^4.0.0
+  shared_preferences: ^2.2.2
+  http: ^1.4.0
+  dio: ^5.9.0
+  get: ^4.6.6
+  get_storage: ^2.1.1
+  flutter_secure_storage: ^9.0.0
+  provider: ^6.1.2
+  logger: ^2.6.0
+  logging: ^1.2.0
+  image_picker: ^1.1.0
+  flutter_svg: ^2.0.1
+  share_plus: ^12.0.0
+  qr_flutter: ^4.0.0
+  carousel_slider: ^5.1.1
+  device_preview: ^1.1.0
+  in_app_purchase: ^3.1.7
+  local_auth: ^2.3.0
+  flutter_dotenv: ^6.0.0
+
+  # State mgmt & charts
+  flutter_riverpod: ^3.0.1
+  fl_chart: ^1.1.0
+  collection: ^1.18.0
+  config: ^0.8.0
+
+ 
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+  # ✅ Codegen toolchain for your models
+ 
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+
+# Removed the override since the same version is already in dependencies
+# dependency_overrides:
+#   carousel_slider: ^5.1.1
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/visa.png
+    - assets/mastercard.png
+    - assets/images/fintech1.png
+    - assets/images/fintech2.png
+    - assets/images/fintech3.png
+    - assets/logo.png
+    - assets/icon.png
+    - .env.production
