@@ -26,6 +26,7 @@ dependencies:
   logger: ^2.6.0
   logging: ^1.2.0
   image_picker: ^1.1.0
+  flutter_image_compress: ^2.3.0
   flutter_svg: ^2.0.1
   share_plus: ^12.0.0
   qr_flutter: ^4.0.0
@@ -40,6 +41,8 @@ dependencies:
   fl_chart: ^1.1.0
   collection: ^1.18.0
   config: ^0.8.0
+  url_launcher: ^6.3.2
+  path_provider: ^2.1.5
 
  
 
@@ -72,4 +75,5 @@ flutter:
     - assets/images/fintech3.png
     - assets/logo.png
     - assets/icon.png
+    - assets/icons/fingerprint.svg
     - .env.production

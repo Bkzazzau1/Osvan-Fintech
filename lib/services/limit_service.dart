@@ -1,35 +1,59 @@
-import 'dart:convert';
+// lib/services/limit_service.dart
+import 'package:dio/dio.dart';
 
-import 'package:http/http.dart' as http;
-// ⬇️ use your actual config file
-import 'package:osvan_app/screen/wallet/services/config_service.dart'
-    show ConfigService;
+import 'api/api_paths.dart';
+import 'api/core_client.dart';
 
-import '../services/auth_service.dart'; // AuthService.getToken()
+class LimitServiceError implements Exception {
+  final String code;
+  final String? details;
+  LimitServiceError(this.code, {this.details});
+
+  @override
+  String toString() =>
+      'LimitServiceError($code${details != null ? ": $details" : ""})';
+}
 
 class LimitService {
-  static const String _limitsPath = '/v1/profile/limits/';
+  static String _msg(dynamic data, {String fallback = 'Request failed'}) {
+    try {
+      if (data is Map) {
+        final m = Map<String, dynamic>.from(data);
+        final msg = (m['detail'] ?? m['error'] ?? m['message'] ?? fallback)
+            .toString()
+            .trim();
+        if (msg.isNotEmpty) return msg;
 
-  // If your config field is named differently, change `ConfigService.baseUrl` here.
-  static Uri _url() => Uri.parse('${ConfigService.baseUrl}$_limitsPath');
+        // try field errors: {"daily_limit":["..."]}
+        if (m.isNotEmpty) {
+          m.keys.first.toString();
+          final v = m[m.keys.first];
+          if (v is List && v.isNotEmpty) return v.first.toString();
+          if (v != null) return v.toString();
+        }
+      } else if (data is String && data.trim().isNotEmpty) {
+        return data.trim();
+      }
+    } catch (_) {}
+    return fallback;
+  }
 
   static Future<Map<String, dynamic>> getLimits() async {
-    final token = await AuthService.getToken();
-    final res = await http.get(
-      _url(),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body) as Map<String, dynamic>;
-    } else if (res.statusCode == 401) {
-      throw LimitServiceError('unauthorized');
-    } else {
-      throw LimitServiceError('server_error_${res.statusCode}',
-          details: res.body);
+    await CoreClient.ensure();
+    try {
+      final res = await CoreClient.I.dio.get(ApiPaths.profileLimits);
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      throw LimitServiceError('server', details: 'Unexpected response');
+    } on DioException catch (e) {
+      final sc = e.response?.statusCode ?? 0;
+      if (sc == 401) throw LimitServiceError('unauthorized');
+      throw LimitServiceError(
+        sc == 400 ? 'validation' : 'server_error_$sc',
+        details: _msg(e.response?.data, fallback: 'Could not load limits'),
+      );
+    } catch (e) {
+      throw LimitServiceError('server', details: e.toString());
     }
   }
 
@@ -37,50 +61,32 @@ class LimitService {
     required int daily,
     required int monthly,
   }) async {
-    final token = await AuthService.getToken();
-    final body = json.encode({
-      'daily_limit': daily,
-      'monthly_limit': monthly,
-    });
-
-    final res = await http.put(
-      _url(),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: body,
-    );
-
-    if (res.statusCode == 200) {
-      return;
-    } else if (res.statusCode == 400) {
-      final data = _safeJson(res.body);
-      final msg =
-          (data['error'] ?? data['detail'] ?? 'validation_error').toString();
-      throw LimitServiceError('validation', details: msg);
-    } else if (res.statusCode == 401) {
-      throw LimitServiceError('unauthorized');
-    } else {
-      throw LimitServiceError('server_error_${res.statusCode}',
-          details: res.body);
-    }
-  }
-
-  static Map<String, dynamic> _safeJson(String s) {
+    await CoreClient.ensure();
     try {
-      return json.decode(s) as Map<String, dynamic>;
-    } catch (_) {
-      return {};
+      // your backend likely supports PATCH (ProfileApi uses PATCH)
+      await CoreClient.I.dio.patch(
+        ApiPaths.profileLimits,
+        data: {
+          'daily_limit': daily,
+          'monthly_limit': monthly,
+        },
+      );
+      return;
+    } on DioException catch (e) {
+      final sc = e.response?.statusCode ?? 0;
+      if (sc == 401) throw LimitServiceError('unauthorized');
+
+      if (sc == 400) {
+        throw LimitServiceError(
+          'validation',
+          details: _msg(e.response?.data, fallback: 'validation_error'),
+        );
+      }
+
+      throw LimitServiceError(
+        'server_error_$sc',
+        details: _msg(e.response?.data, fallback: 'Failed to update limits'),
+      );
     }
   }
-}
-
-class LimitServiceError implements Exception {
-  final String code;
-  final String? details;
-  LimitServiceError(this.code, {this.details});
-  @override
-  String toString() =>
-      'LimitServiceError($code${details != null ? ": $details" : ""})';
 }

@@ -1,108 +1,105 @@
 // lib/services/auth_service.dart
+//
+// Centralized auth helper built on top of ApiClient + SessionStore.
+// - Primary login: POST /api/token/login/  (email-first)
+// - Fallbacks kept for resilience (/api/token/, djoser, custom v1)
+// - IMPORTANT FIX:
+//   Fail fast on auth failures even when Dio validateStatus allows 4xx.
+//
+
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:get_storage/get_storage.dart';
-import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/services/api_client.dart';
+import 'package:osvan_app/store/session_store.dart';
 
 class AuthService {
-  // ---- storage (web & mobile via GetStorage) ----
-  static final GetStorage _box = GetStorage();
-
-  /// Init storage early in app bootstrap (e.g., in main()).
+  /// Optional bootstrap (safe to call multiple times)
   static Future<void> init() async {
-    await GetStorage.init();
-    await _box.writeIfNull('__init__', true);
+    await SessionStore.init();
+    await ApiClient.ensureInitialized();
   }
 
-  // ---- token helpers ----
-  static Future<String?> getToken() async =>
-      _box.read<String>('access') ?? _box.read<String>('token');
-
-  static Future<String?> getRefresh() async => _box.read<String>('refresh');
+  static Future<String?> getToken() => SessionStore.instance.access;
+  static Future<String?> getRefresh() => SessionStore.instance.refresh;
 
   static Future<void> setTokens({String? access, String? refresh}) async {
-    if (access != null) {
-      await _box.write('access', access);
-      await _box.write('token', access); // backward compat
-    }
-    if (refresh != null) {
-      await _box.write('refresh', refresh);
-    }
+    if (access == null && refresh == null) return;
+    await SessionStore.instance.saveTokens(
+      access: access ?? (await SessionStore.instance.access) ?? '',
+      refresh: refresh,
+    );
   }
 
-  static Future<void> clear() async {
-    await _box.remove('access');
-    await _box.remove('token');
-    await _box.remove('refresh');
+  static Future<void> clear() => SessionStore.instance.clear();
+  static Future<bool> isLoggedIn() => SessionStore.instance.isLoggedIn;
+
+  static bool _isDefinitiveAuthFailure(int? code) {
+    return code == 400 || code == 401 || code == 403;
   }
 
-  static Future<bool> isLoggedIn() async =>
-      (await getToken())?.isNotEmpty == true;
+  static String _humanMessageFromResponse(dynamic data, int? statusCode) {
+    if (data is Map) {
+      final detail = data['detail'];
+      if (detail != null) {
+        final s = detail.toString().trim();
+        if (s.isNotEmpty) return s;
+      }
 
-  // ---- Username/password login (primary = email) ----
-  //
-  // Primary (Django SimpleJWT):
-  //   POST /api/token/  -> { "access": "...", "refresh": "..." }
-  //
-  // We try a few payload shapes to be resilient across backends. For /token/,
-  // we send username=<email> first because the live API requires `username`.
+      for (final k in ['password', 'username', 'email', 'non_field_errors']) {
+        final v = data[k];
+        if (v is List && v.isNotEmpty) return v.first.toString();
+        if (v is String && v.trim().isNotEmpty) return v.trim();
+      }
+    }
+
+    if (statusCode == 401) return 'Wrong email or password.';
+    if (statusCode == 403) return 'Account disabled.';
+    if (statusCode == 400) return 'Invalid login details.';
+    return 'Login failed';
+  }
+
+  static Map<String, dynamic> _mapOrEmpty(dynamic data) =>
+      (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+
+  static Map<String, dynamic> _unwrap(dynamic data) {
+    final m = _mapOrEmpty(data);
+    if (m['data'] is Map<String, dynamic>) {
+      return m['data'] as Map<String, dynamic>;
+    }
+    return m;
+  }
+
+  /// Returns the raw response map and persists tokens when present.
   static Future<Map<String, dynamic>> login({
     required String username,
     required String password,
     required String email,
   }) async {
-    final base = _ensureApiSuffix(_normalizeBaseUrl(Env.autoBaseUrl));
+    await init();
+    final dio = ApiClient.shared.dio;
 
-    final dio = Dio(BaseOptions(
-      baseUrl: base, // e.g. https://fintech.osvan.africa/api
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      headers: const {
-        // ensure no stale token goes out
-        'Authorization': null,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    ));
-
-    // ---- minimal extras: request logging + quick reachability check ----
-    dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: false, // avoid dumping tokens
-    ));
-
-    // Optional connectivity check (non-fatal); your server exposes /api/health/
-    try {
-      await dio.get('/health/',
-          options: Options(headers: {'X-Skip-Auth': '1'}));
-    } catch (_) {
-      // ignore; we still try login endpoints next
-    }
-
-    // Endpoints are relative to /api
-    final endpoints = <String>[
-      '/token/', // SimpleJWT std (your live endpoint)
-      '/auth/jwt/create/', // djoser/jwt
-      '/v1/auth/login/', // custom v1
-      '/auth/login/', // generic
+    // Primary + fallbacks (relative to dio.baseUrl)
+    const endpoints = <String>[
+      ApiPaths.tokenLogin, // "/api/token/login/"
+      ApiPaths.obtain, // "/api/token/"
+      '/auth/jwt/create/',
+      '/v1/auth/login/',
+      '/auth/login/',
     ];
 
-    // Most backends accept either email or username; for /token/ the server
-    // wants "username", so we try username=email first.
     final uname = (username.isNotEmpty ? username : email).trim();
 
     List<Map<String, dynamic>> shapesFor(String path) {
-      if (path == '/token/') {
-        // **IMPORTANT**: server expects `username`
+      if (path == ApiPaths.obtain) {
+        // /api/token/ usually expects "username"
         return [
-          {'username': email.trim(), 'password': password}, // ← FIRST
+          {'username': email.trim(), 'password': password},
           {'username': uname, 'password': password},
           {'email': email.trim(), 'password': password},
         ];
       }
-      // other endpoints—try email first, then username fallbacks
+      // /api/token/login/ prefers email
       return [
         {'email': email.trim(), 'password': password},
         {'username': email.trim(), 'password': password},
@@ -110,206 +107,111 @@ class AuthService {
       ];
     }
 
-    DioException? lastDio;
+    // Ensure interceptor won’t attach Authorization on these calls
+    final noAuth = Options(
+      headers: const {'X-Skip-Auth': '1', 'Content-Type': 'application/json'},
+      sendTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 20),
+    );
+
+    DioException? lastErr;
 
     for (final path in endpoints) {
       final shapes = shapesFor(path);
+
       for (final body in shapes) {
         try {
-          final r = await dio.post<Map<String, dynamic>>(
-            path,
-            data: body,
-            options: Options(headers: {
-              'X-Skip-Auth': '1', // <- prevent Authorization injection
-            }),
-          );
+          final r = await dio.post(path, data: body, options: noAuth);
 
-          final data = r.data ?? <String, dynamic>{};
-          // Handle wrappers like { "data": { ... } }
-          final map = (data['data'] is Map) ? (data['data'] as Map) : data;
+          final status = r.statusCode;
+          final raw = _mapOrEmpty(r.data);
+          final flat = _unwrap(raw);
 
-          final access = (map['access'] ?? map['token'] ?? map['access_token'])
-              ?.toString()
-              .trim();
-          final refresh = map['refresh']?.toString().trim();
-
-          if ((access != null && access.isNotEmpty)) {
-            await setTokens(access: access, refresh: refresh);
-            return Map<String, dynamic>.from(data);
+          // ✅ FAIL FAST: If 400/401/403 returned as "success" due to validateStatus
+          if (_isDefinitiveAuthFailure(status)) {
+            final msg = _humanMessageFromResponse(r.data, status);
+            throw DioException(
+              requestOptions: r.requestOptions,
+              response: r,
+              type: DioExceptionType.badResponse,
+              message: msg,
+              error: msg,
+            );
           }
 
-          // No tokens returned → treat as error and try next shape/endpoint
-          lastDio = DioException.badResponse(
-            statusCode: r.statusCode ?? 400,
+          // ✅ FAIL FAST: backend error shape (DRF)
+          final detail = (flat['detail'] ?? raw['detail'])?.toString().trim();
+          if (detail != null && detail.isNotEmpty) {
+            throw DioException(
+              requestOptions: r.requestOptions,
+              response: r,
+              type: DioExceptionType.badResponse,
+              message: detail,
+              error: detail,
+            );
+          }
+
+          final access =
+              (flat['access'] ?? flat['token'] ?? flat['access_token'])
+                  ?.toString();
+          final refresh =
+              (flat['refresh'] ?? flat['refresh_token'])?.toString();
+
+          if (access != null && access.isNotEmpty) {
+            await SessionStore.instance
+                .saveTokens(access: access, refresh: refresh);
+            return raw;
+          }
+
+          // ✅ No token in response → treat as failure immediately (don’t loop)
+          throw DioException(
             requestOptions: r.requestOptions,
             response: r,
+            type: DioExceptionType.badResponse,
+            message: 'Login response missing access token',
+            error: 'Login response missing access token',
           );
         } on DioException catch (e) {
-          lastDio = e; // try next shape or endpoint
+          lastErr = e;
+
+          // If definitive auth failure, stop immediately (don’t try other endpoints)
+          final code = e.response?.statusCode;
+          if (_isDefinitiveAuthFailure(code)) rethrow;
+
+          // Otherwise continue trying next shape/endpoint (404, network, etc.)
         }
       }
     }
 
-    // Exhausted attempts
-    if (lastDio != null) throw lastDio;
+    if (lastErr != null) throw lastErr;
+
     throw DioException(
-      requestOptions: RequestOptions(path: '$base/token/'),
+      requestOptions: RequestOptions(path: ApiPaths.tokenLogin),
       message: 'Login failed',
     );
   }
 
-  // ---- logout (optional server notify) ----
   static Future<void> logout({bool notifyServer = true}) async {
-    final access = await getToken();
-    final refresh = await getRefresh();
+    await init();
 
-    if (notifyServer && (access != null || refresh != null)) {
-      final base = _ensureApiSuffix(_normalizeBaseUrl(Env.autoBaseUrl));
-      final dio = Dio(BaseOptions(
-        baseUrl: base,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-        headers: {
-          if (access != null) 'Authorization': 'Bearer $access',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ));
+    if (notifyServer) {
+      final dio = ApiClient.shared.dio;
+      final refresh = await getRefresh();
 
-      final endpoints = <String>[
+      final candidates = <String>[
         '/v1/auth/logout/',
         '/auth/logout/',
-        '/token/blacklist/', // SimpleJWT blacklist
+        '/token/blacklist/',
       ];
 
-      for (final path in endpoints) {
+      for (final path in candidates) {
         try {
-          await dio.post<Map<String, dynamic>>(
-            path,
-            data: jsonEncode({'refresh': refresh}),
-            options: Options(headers: {
-              if (access != null) 'Authorization': 'Bearer $access',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            }),
-          );
+          await dio.post(path, data: {'refresh': refresh});
           break;
-        } catch (_) {
-          // swallow and try next
-        }
+        } catch (_) {}
       }
     }
 
     await clear();
-  }
-
-  // ---- utils ----
-  static String _normalizeBaseUrl(String base) {
-    if (base.isEmpty) return '';
-    return base.replaceAll(RegExp(r'/+$'), ''); // trim trailing slashes
-  }
-
-  static String _ensureApiSuffix(String root) {
-    return root.endsWith('/api') ? root : '$root/api';
-  }
-}
-
-// ---- (Optional) auto-attach & refresh helpers ------------------------------
-extension AuthDio on AuthService {
-  static void attachJwtRefresh(Dio dio) {
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (opts, handler) async {
-          final access = await AuthService.getToken();
-          if (access != null && access.isNotEmpty) {
-            opts.headers['Authorization'] = 'Bearer $access';
-          }
-          handler.next(opts);
-        },
-        onError: (e, handler) async {
-          final is401 = e.response?.statusCode == 401;
-          final hadAuth = e.requestOptions.headers['Authorization'] != null;
-          if (is401 && hadAuth) {
-            final newAccess = await _tryRefresh(dio);
-            if (newAccess != null) {
-              final retried =
-                  await _retryWithNewToken(dio, e.requestOptions, newAccess);
-              return handler.resolve(retried);
-            }
-          }
-          handler.next(e);
-        },
-      ),
-    );
-  }
-
-  static Future<String?> _tryRefresh(Dio dio) async {
-    final refresh = await AuthService.getRefresh();
-    if (refresh == null || refresh.isEmpty) return null;
-
-    final base = dio.options.baseUrl.isNotEmpty
-        ? dio.options.baseUrl
-        : AuthService._ensureApiSuffix(
-            AuthService._normalizeBaseUrl(Env.autoBaseUrl),
-          );
-
-    final endpoints = <String>[
-      '$base/token/refresh/',
-      '$base/auth/jwt/refresh/',
-      '$base/v1/auth/refresh/',
-      '$base/auth/refresh/',
-    ];
-
-    for (final url in endpoints) {
-      try {
-        final r = await dio.post<Map<String, dynamic>>(
-          url,
-          data: {'refresh': refresh},
-          options: Options(headers: {'Authorization': null}),
-        );
-        if (r.statusCode == 200 && r.data is Map) {
-          final data = r.data!;
-          final map = (data['data'] is Map) ? (data['data'] as Map) : data;
-          final access = map['access']?.toString();
-          if (access != null && access.isNotEmpty) {
-            await AuthService.setTokens(access: access);
-            return access;
-          }
-        }
-      } catch (_) {
-        // try next
-      }
-    }
-    return null;
-  }
-
-  static Future<Response<dynamic>> _retryWithNewToken(
-    Dio dio,
-    RequestOptions o,
-    String access,
-  ) {
-    final headers = Map<String, dynamic>.from(o.headers)
-      ..['Authorization'] = 'Bearer $access';
-
-    final opts = Options(
-      method: o.method,
-      headers: headers,
-      responseType: o.responseType,
-      contentType: o.contentType,
-      followRedirects: o.followRedirects,
-      sendTimeout: o.sendTimeout,
-      receiveTimeout: o.receiveTimeout,
-      validateStatus: o.validateStatus,
-    );
-
-    return dio.request<dynamic>(
-      o.path,
-      data: o.data,
-      queryParameters: o.queryParameters,
-      options: opts,
-      cancelToken: o.cancelToken,
-      onSendProgress: o.onSendProgress,
-      onReceiveProgress: o.onReceiveProgress,
-    );
   }
 }

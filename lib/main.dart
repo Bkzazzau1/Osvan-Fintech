@@ -10,22 +10,27 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/controller/auth_controller.dart';
 import 'package:osvan_app/controller/theme_controller.dart';
 import 'package:osvan_app/core/colors.dart';
+import 'package:osvan_app/core/theme.dart';
 import 'package:osvan_app/routes/app_routes.dart';
 import 'package:osvan_app/screen/wallet/controllers/wallets_controller.dart';
 // ✅ Services / Controllers we must register at startup
 import 'package:osvan_app/screen/wallet/services/config_service.dart';
 import 'package:osvan_app/services/api_client.dart';
+// 🔐 auth bootstrap (centralized token store)
+import 'package:osvan_app/store/session_store.dart';
 
 // Debug-only smoke test for /api/token/ (safe: runs only in debug)
 import 'auth_test.dart' show testEmailLogin;
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
   // Wrap startup in a guarded zone to avoid silent crashes in release
   await runZonedGuarded<Future<void>>(() async {
+    // IMPORTANT: initialize bindings inside this same zone
+    WidgetsFlutterBinding.ensureInitialized();
+
     // 1) Load env (non-fatal if missing)
     try {
       await dotenv.load(fileName: '.env.production');
@@ -36,18 +41,26 @@ Future<void> main() async {
     // 2) Init local KV store (used by tokens/config/user prefs)
     await GetStorage.init();
 
+    // 2b) 🔐 Init centralized token store (safe on web & mobile)
+    await SessionStore.init();
+
     // 3) Initialize ConfigService & register it for GetX lookups
-    await ConfigService.init(); // loads flags/rates if you implemented it so
+    await ConfigService.init(); // loads flags/rates if implemented
     Get.put<ConfigService>(
-        ConfigService()); // ✅ ensure Get.find<ConfigService>() works
+        ConfigService()); // ensure Get.find<ConfigService>() works
 
     // 4) Initialize API client singleton before any controller uses it
     await ApiClient.ensureInitialized();
 
+    // 4b) 🔐 Make AuthController available app-wide
+    Get.put<AuthController>(AuthController(), permanent: true).init();
+
     // 5) Register core controllers available app-wide
     Get.put<ThemeController>(ThemeController());
-    Get.put<WalletsController>(WalletsController(),
-        permanent: true); // ✅ dashboard can resolve immediately
+    Get.put<WalletsController>(WalletsController(), permanent: true);
+
+    // Force welcome as the first page (even if a session exists)
+    const String startRoute = AppRoutes.welcome;
 
     // 6) Optional diagnostics in debug builds
     if (kDebugMode) {
@@ -85,7 +98,7 @@ Future<void> main() async {
       ),
     );
 
-    runApp(const MyApp());
+    runApp(MyApp(initialRoute: startRoute));
   }, (error, stack) {
     // Last line of defense logging; replace with your logger if needed
     if (kDebugMode) {
@@ -107,7 +120,8 @@ Future<void> _debugPing() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+  const MyApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -118,82 +132,11 @@ class MyApp extends StatelessWidget {
           title: 'Osvan',
           themeMode: themeController.themeMode,
 
-          // Light Theme
-          theme: ThemeData(
-            brightness: Brightness.light,
-            scaffoldBackgroundColor: osvanWhite,
-            primaryColor: osvanGreen,
-            fontFamily: 'Poppins',
-            cardColor: osvanWhite,
-            inputDecorationTheme: InputDecorationTheme(
-              labelStyle: const TextStyle(color: osvanBlack),
-              filled: true,
-              fillColor: osvanGrey.withOpacity(0.2),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            textTheme: const TextTheme(
-              bodyLarge: TextStyle(color: osvanBlack, fontSize: 16),
-              bodyMedium: TextStyle(color: osvanBlack, fontSize: 14),
-              titleLarge: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: osvanBlack,
-              ),
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: osvanWhite,
-              elevation: 0,
-              iconTheme: IconThemeData(color: osvanBlack),
-              titleTextStyle: TextStyle(
-                color: osvanBlack,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
-
-          // Dark Theme
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor: osvanDarkBackground,
-            primaryColor: osvanDarkAccent,
-            fontFamily: 'Poppins',
-            cardColor: osvanDarkCard,
-            inputDecorationTheme: InputDecorationTheme(
-              labelStyle: const TextStyle(color: osvanWhite),
-              filled: true,
-              fillColor: osvanBlack.withOpacity(0.2),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            textTheme: const TextTheme(
-              bodyLarge: TextStyle(color: osvanWhite, fontSize: 16),
-              bodyMedium: TextStyle(color: osvanWhite, fontSize: 14),
-              titleLarge: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: osvanWhite,
-              ),
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: osvanDarkCard,
-              elevation: 0,
-              iconTheme: IconThemeData(color: osvanWhite),
-              titleTextStyle: TextStyle(
-                color: osvanWhite,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
+          theme: osvanLightTheme,
+          darkTheme: osvanDarkTheme,
 
           // Routes
-          initialRoute: AppRoutes.welcome,
+          initialRoute: initialRoute,
           getPages: AppRoutes.pages,
         );
       },

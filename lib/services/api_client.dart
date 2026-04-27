@@ -1,7 +1,7 @@
 // Osvan API client (Dio) aligned 1:1 to live backend routes (/api/...)
 // Mobile hardening:
-//  - Initializes GetStorage automatically (first use) so Android/iOS don’t crash
-//  - Robust auth-path matching (works even if caller uses absolute URLs)
+//  - Uses centralized SessionStore for tokens (web + mobile)
+//  - Robust auth-path matching (works for absolute/relative URLs)
 //  - Keeps X-Skip-Auth on auth endpoints to avoid stale Authorization
 //  - Same headers/timeouts; HTTPS to fintech.osvan.africa
 
@@ -10,9 +10,9 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:get_storage/get_storage.dart';
+import 'package:get/get.dart' hide Response;
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/store/session_store.dart';
 
 /// ---- Centralized API paths (matched to server) -----------------------------
 class ApiPaths {
@@ -25,19 +25,34 @@ class ApiPaths {
 
   // Health
   static const String health = '/api/health/';
+  static const String profileMe = '/api/profile/me/';
+
+  // User
+  static const String userMe = '/api/user/me/';
 
   // Wallets
   static const String wallets = '/api/wallets/';
   static const String walletCreate = '/api/wallets/create/';
+
+  // ── Virtual Accounts (stable contract)
+  // Create + legacy status live on the SAME route (POST/GET):
   static const String virtualAccount = '/api/wallets/virtual-account/';
-  static const String collectionDetails = '/api/wallets/collection-details/';
+  // Preferred owner lookup:
+  static const String virtualAccountMine = '/api/wallets/virtual-account/mine/';
+
+  // Collections (info for country/method)
+  static const String collectionDetails = '/api/wallets/collection/';
+
+  // Crypto receive address list (if exposed)
   static const String cryptoWalletAddresses = '/api/wallets/crypto-addresses/';
+
+  // Global add-money (test console)
   static const String addMoney = '/api/wallets/add-money/';
 
   // Fiat Transactions (wallet history)
   static const String transactions = '/api/transactions/';
 
-  // Crypto
+  // Crypto (FE façade to your v1 crypto routes)
   static const String cryptoBalances = '/api/crypto/balances/';
   static const String cryptoAddress = '/api/crypto/address/';
   static const String cryptoTxs = '/api/crypto/transactions/';
@@ -46,6 +61,20 @@ class ApiPaths {
   static const String cryptoTransfer = '/api/transfer/crypto/';
   static const String transferEstimate = '/api/transfer/estimate/';
   static const String transferSend = '/api/transfer/send/';
+
+  // --- Payouts (bank / mobile money) — kept for back-compat, prefer PayoutsApi
+  static const String payoutCountries = '/api/payout/supported-countries/';
+  static const String payoutRequirementsPrefix =
+      '/api/payout/requirements/'; // + <country>/
+  static const String payoutBanksPrefix =
+      '/api/payout/banks/'; // + <country>/<currency>/
+  static const String payoutBeneficiaries = '/api/payout/beneficiaries/';
+  static const String payoutBeneficiariesList =
+      '/api/payout/beneficiaries/list/';
+  static const String payoutInit = '/api/payout/init/';
+  static const String payoutFinalize = '/api/payout/finalize/';
+  static const String payoutAttachDocPrefix =
+      '/api/payout/attach-document/'; // + <transaction_id>/
 }
 
 /// Back-compat alias (static members aren’t inherited in Dart)
@@ -57,11 +86,20 @@ class _Api {
 
   // Health
   static const health = ApiPaths.health;
+  static const profileMe = ApiPaths.profileMe;
+
+  // User
+  static const userMe = ApiPaths.userMe;
 
   // Wallets
   static const wallets = ApiPaths.wallets;
   static const walletCreate = ApiPaths.walletCreate;
+
+  // Virtual Accounts
   static const virtualAccount = ApiPaths.virtualAccount;
+  static const virtualAccountMine = ApiPaths.virtualAccountMine;
+
+  // Collections / misc
   static const collectionDetails = ApiPaths.collectionDetails;
   static const addMoney = ApiPaths.addMoney;
   static const cryptoWalletAddresses = ApiPaths.cryptoWalletAddresses;
@@ -78,68 +116,13 @@ class _Api {
   static const cryptoTransfer = ApiPaths.cryptoTransfer;
   static const transferEstimate = ApiPaths.transferEstimate;
   static const transferSend = ApiPaths.transferSend;
-}
 
-/// ---- Standardized token store ----------------------------------------------
-class _TokenStore {
-  final _secure = const FlutterSecureStorage();
-  final _box = GetStorage();
-
-  static bool _boxReady = false;
-  static Future<void> ensureBoxReady() async {
-    if (_boxReady) return;
-    await GetStorage.init();
-    _boxReady = true;
-  }
-
-  Future<String?> readAccess() async {
-    await ensureBoxReady();
-    final s = await _secure.read(key: 'access');
-    if (s != null && s.isNotEmpty) return s;
-    final boxAccess = _box.read<String>('access');
-    if (boxAccess != null && boxAccess.isNotEmpty) return boxAccess;
-    final legacy = _box.read<String>('token');
-    return (legacy != null && legacy.isNotEmpty) ? legacy : null;
-  }
-
-  Future<String?> readRefresh() async {
-    await ensureBoxReady();
-    return await _secure.read(key: 'refresh') ?? _box.read<String>('refresh');
-  }
-
-  Future<void> writeBoth({required String access, String? refresh}) async {
-    await ensureBoxReady();
-    try {
-      await _secure.write(key: 'access', value: access);
-    } catch (_) {}
-    await _box.write('access', access);
-    await _box.write('token', access); // legacy alias
-
-    if (refresh != null) {
-      try {
-        await _secure.write(key: 'refresh', value: refresh);
-      } catch (_) {}
-      await _box.write('refresh', refresh);
-    }
-  }
-
-  Future<void> clear() async {
-    await ensureBoxReady();
-    try {
-      await _secure.delete(key: 'access');
-    } catch (_) {}
-    try {
-      await _secure.delete(key: 'refresh');
-    } catch (_) {}
-    await _box.remove('access');
-    await _box.remove('refresh');
-    await _box.remove('token');
-  }
+  
 }
 
 class ApiClient {
   final Dio _dio;
-  final _TokenStore _store;
+  final SessionStore _store;
 
   bool _refreshing = false;
   final List<Completer<void>> _waiters = [];
@@ -172,7 +155,8 @@ class ApiClient {
   }
 
   static Future<ApiClient> create() async {
-    await _TokenStore.ensureBoxReady(); // <- mobile-safe
+    await SessionStore.init(); // ensure box is ready (safe on web/mobile)
+
     final envBase = _normalizeRoot(Env.autoBaseUrl);
     final baseUrl =
         envBase.isNotEmpty ? envBase : _normalizeRoot(ApiPaths.base);
@@ -185,8 +169,8 @@ class ApiClient {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      // Surface 4xx to app; Dio will still throw on transport errors
-      validateStatus: (code) => code != null && code < 500,
+      // ✅ Only 2xx is success. 4xx/5xx will throw DioException.
+      validateStatus: (code) => code != null && code >= 200 && code < 300,
     ));
 
     if (kDebugMode) {
@@ -201,7 +185,7 @@ class ApiClient {
       ));
     }
 
-    final store = _TokenStore();
+    final store = SessionStore.instance;
     final client = ApiClient._(dio, store);
 
     bool isAuthPath(String p) {
@@ -216,14 +200,21 @@ class ApiClient {
       onRequest: (options, handler) async {
         final skipAuth = options.headers['X-Skip-Auth']?.toString() == '1';
         if (!skipAuth && !isAuthPath(options.path)) {
-          final access = await store.readAccess();
-          if (access?.isNotEmpty == true) {
-            options.headers['Authorization'] = 'Bearer $access';
+          final hdr = await store.authHeader();
+          if (hdr.isNotEmpty) {
+            options.headers.addAll(hdr);
           }
         } else {
           options.headers.remove('Authorization');
         }
         handler.next(options);
+      },
+      onResponse: (response, handler) async {
+        if (_isAuthExpiredResponse(response)) {
+          await _forceLogoutToLogin();
+          return;
+        }
+        handler.next(response);
       },
       onError: (e, handler) async {
         final req = e.requestOptions;
@@ -234,18 +225,20 @@ class ApiClient {
             !alreadyRetried) {
           final ok = await client._refreshTokens();
           if (ok) {
-            final newAccess = await store.readAccess();
+            final newHdr = await store.authHeader();
             final clone = await dio.fetch(
               req.copyWith(
-                headers: {
-                  ...req.headers,
-                  if (newAccess != null) 'Authorization': 'Bearer $newAccess',
-                },
+                headers: {...req.headers, ...newHdr},
                 extra: {...req.extra, '__ret': true},
               ),
             );
             return handler.resolve(clone);
           }
+          await _forceLogoutToLogin();
+          return;
+        }
+        if (e.response?.statusCode == 401) {
+          await _forceLogoutToLogin();
         }
         handler.next(e);
       },
@@ -254,10 +247,30 @@ class ApiClient {
     return client;
   }
 
+  static bool _isAuthExpiredResponse(Response res) {
+    final code = res.statusCode ?? 0;
+    if (code != 401 && code != 403) return false;
+    final data = res.data;
+    if (data is Map) {
+      final msg =
+          '${data['detail'] ?? data['message'] ?? data['error'] ?? ''}'.toLowerCase();
+      final codeStr = '${data['code'] ?? ''}'.toLowerCase();
+      if (msg.contains('token') ||
+          msg.contains('credential') ||
+          msg.contains('expired') ||
+          codeStr.contains('token') ||
+          codeStr.contains('expired')) {
+        return true;
+      }
+    }
+    return true; // treat unknown 401/403 as expired
+  }
+
   T _unwrap<T>(dynamic data) {
     if (data is Map) {
       if (data.containsKey('data')) return data['data'] as T;
       if (data.containsKey('results')) return data['results'] as T;
+      if (data.containsKey('result')) return data['result'] as T;
     }
     return data as T;
   }
@@ -265,13 +278,106 @@ class ApiClient {
   Map<String, dynamic> _mapOrEmpty(dynamic data) =>
       (data is Map<String, dynamic>) ? data : <String, dynamic>{};
 
+  /// Envelope normalizer → `{ ok, data, message }`
+  Map<String, dynamic> _envelope(dynamic body) {
+    final m = _mapOrEmpty(body);
+    final data = m['data'] ?? m['result'] ?? body;
+    final ok =
+        (m['ok'] == true) || (m['status'] == true) || (m['success'] == true);
+    final msg = (m['message'] ?? m['detail'] ?? 'done').toString();
+    return {'ok': ok, 'data': data, 'message': msg};
+  }
+
+  /// Normalize provider/DB VA shapes (map or list) into a single flat FE map.
+  Map<String, dynamic> _normalizeVAForFE(Map<String, dynamic> resp) {
+    Map<String, dynamic> fromRecord(Map rec) {
+      final rawStatus = (rec['status'] ?? 'READY').toString().toUpperCase();
+      final status = (rawStatus == 'ACTIVE') ? 'READY' : rawStatus;
+      return {
+        'status': status,
+        'account_name': rec['account_name'] ?? rec['accountName'],
+        'account_number': rec['account_number'] ?? rec['accountNumber'],
+        'bank_name': rec['bank_name'] ?? rec['bankName'] ?? rec['bank'],
+        'bank_code': rec['bank_code'] ?? rec['bankCode'],
+        'provider': rec['provider'] ?? 'local',
+        'reference': rec['reference'],
+        'currency': (rec['currency'] ?? 'NGN').toString().toUpperCase(),
+      };
+    }
+
+    Map<String, dynamic> pickBestRecord(List items) {
+      if (items.isEmpty) return <String, dynamic>{};
+      try {
+        final parsed = items
+            .whereType<Map>()
+            .map((e) => {
+                  'raw': e,
+                  'ts': DateTime.tryParse(
+                          (e['created_at'] ?? e['createdAt'] ?? '')
+                              .toString()) ??
+                      DateTime.fromMillisecondsSinceEpoch(0),
+                })
+            .toList();
+        if (parsed.isNotEmpty) {
+          parsed.sort((a, b) => (b['ts'] as DateTime)
+              .compareTo(a['ts'] as DateTime)); // newest first
+          return Map<String, dynamic>.from(parsed.first['raw'] as Map);
+        }
+      } catch (_) {}
+      final first = items.first;
+      return Map<String, dynamic>.from(
+          first is Map ? first : <String, dynamic>{});
+    }
+
+    if (resp.containsKey('account_number') ||
+        resp.containsKey('accountNumber')) {
+      return fromRecord(resp);
+    }
+
+    if (resp.containsKey('result')) {
+      final result = resp['result'];
+      if (result is Map) {
+        final data = result['data'];
+        if (data is Map) {
+          return fromRecord({
+            ...data,
+            'status': (data['status'] ?? 'active').toString().toUpperCase(),
+            'provider': (resp['provider'] ?? 'brails').toString(),
+          });
+        }
+        if (data is List && data.isNotEmpty) {
+          final best = pickBestRecord(data);
+          return fromRecord({
+            ...best,
+            'provider':
+                (resp['provider'] ?? best['provider'] ?? 'local').toString(),
+          });
+        }
+      }
+    }
+
+    if (resp.containsKey('data') && resp['data'] is List) {
+      final list = resp['data'] as List;
+      if (list.isNotEmpty) {
+        final best = pickBestRecord(list);
+        return fromRecord({
+          ...best,
+          'provider': resp['provider'] ?? best['provider'] ?? 'local',
+        });
+      }
+    }
+
+    return {'status': 'PENDING'};
+  }
+
   Future<bool> _refreshTokens() async {
     if (_refreshing) {
       final waiter = Completer<void>();
       _waiters.add(waiter);
       try {
         await waiter.future;
-        return (await _store.readAccess())?.isNotEmpty == true;
+        final hdr = await _store.authHeader();
+        return hdr.containsKey('Authorization');
       } catch (_) {
         return false;
       }
@@ -279,7 +385,7 @@ class ApiClient {
 
     _refreshing = true;
     try {
-      final refresh = await _store.readRefresh();
+      final refresh = await _store.refresh;
       if (refresh == null || refresh.isEmpty) return false;
 
       try {
@@ -295,7 +401,7 @@ class ApiClient {
         final m = _mapOrEmpty(r.data);
         final access = (m['access'] as String?) ?? '';
         if (access.isNotEmpty) {
-          await _store.writeBoth(access: access);
+          await _store.saveTokens(access: access); // keep existing refresh
           _flushWaiters();
           return true;
         }
@@ -358,7 +464,7 @@ class ApiClient {
         type: DioExceptionType.badResponse,
       );
     }
-    await _store.writeBoth(access: access, refresh: refresh);
+    await _store.saveTokens(access: access, refresh: refresh);
   }
 
   /// Smart login — prefer email; else username.
@@ -392,7 +498,7 @@ class ApiClient {
         type: DioExceptionType.badResponse,
       );
     }
-    await _store.writeBoth(access: access, refresh: refresh);
+    await _store.saveTokens(access: access, refresh: refresh);
   }
 
   Future<void> login(
@@ -401,6 +507,22 @@ class ApiClient {
   }
 
   Future<void> logout() async => _store.clear();
+
+  // ---------- user ----------
+  Future<Map<String, dynamic>> getMe() async {
+    try {
+      final r = await _dio.get(_Api.profileMe);
+      return Map<String, dynamic>.from(_unwrap(r.data));
+    } catch (_) {
+      final r = await _dio.get(_Api.userMe);
+      return Map<String, dynamic>.from(r.data as Map);
+    }
+  }
+
+  Future<Map<String, dynamic>> getProfileMe() async {
+    final r = await _dio.get(_Api.profileMe);
+    return Map<String, dynamic>.from(_unwrap(r.data));
+  }
 
   // ---------- wallets ----------
   Future<List<dynamic>> listWallets() async {
@@ -426,32 +548,58 @@ class ApiClient {
     required String currency,
   }) async {
     final endpoint = '${_Api.wallets}$walletId/add_money/';
-    final r = await _dio
-        .post(endpoint, data: {'amount': amount, 'currency': currency});
+    final r = await _dio.post(endpoint, data: {
+      'amount': amount,
+      'currency': currency,
+    });
     return Map<String, dynamic>.from(_unwrap(r.data));
   }
 
-  // Virtual Account
+  // Virtual Account (legacy GET status)
   Future<Map<String, dynamic>> getVirtualAccountStatus() async {
     final r = await _dio.get(
       _Api.virtualAccount,
       options: Options(
-          sendTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5)),
+          sendTimeout: Duration(seconds: 5),
+          receiveTimeout: Duration(seconds: 5)),
     );
-    return Map<String, dynamic>.from(_unwrap(r.data));
+    return _normalizeVAForFE(Map<String, dynamic>.from(_unwrap(r.data)));
   }
 
-  Future<Map<String, dynamic>> createVirtualAccount(
-      {Map<String, dynamic>? data}) async {
-    final r = await _dio.post(
-      _Api.virtualAccount,
-      data: data ?? const <String, dynamic>{},
+  // Virtual Account (mine) — preferred
+  Future<Map<String, dynamic>> getVirtualAccountMine() async {
+    final r = await _dio.get(
+      _Api.virtualAccountMine,
       options: Options(
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 45)),
+          sendTimeout: Duration(seconds: 5),
+          receiveTimeout: Duration(seconds: 5)),
     );
-    return Map<String, dynamic>.from(_unwrap(r.data));
+    return _normalizeVAForFE(Map<String, dynamic>.from(_unwrap(r.data)));
+  }
+
+  /// Explicit create — POST /api/wallets/virtual-account/
+  /// Accepts either `payload:` (new) or `data:` (old) for back-compat.
+  /// Returns envelope: { ok, data, message, fe }
+  Future<Map<String, dynamic>> createVirtualAccount({
+    Map<String, dynamic>? payload, // NEW
+    Map<String, dynamic>? data, // OLD call sites
+  }) async {
+    final body = payload ?? data ?? const <String, dynamic>{};
+
+    final r = await _dio.post(
+      _Api.virtualAccount, // POST /api/wallets/virtual-account/
+      data: body,
+      options: Options(
+        sendTimeout: Duration(seconds: 10),
+        receiveTimeout: Duration(seconds: 45),
+      ),
+    );
+
+    final env = _envelope(r.data); // { ok, data, message }
+    final fe = _normalizeVAForFE(
+      Map<String, dynamic>.from(_unwrap(r.data)),
+    );
+    return {...env, 'fe': fe};
   }
 
   Future<Map<String, dynamic>?> waitForVAReady({
@@ -461,8 +609,13 @@ class ApiClient {
     final started = DateTime.now();
     Map<String, dynamic> last = {};
     while (DateTime.now().difference(started) < maxWait) {
-      last = await getVirtualAccountStatus();
-      final status = (last['status'] ?? 'READY').toString().toUpperCase();
+      try {
+        last = await getVirtualAccountMine(); // Prefer “mine” when available
+      } catch (_) {
+        last = await getVirtualAccountStatus(); // Fallback
+      }
+      final status =
+          (last['status'] ?? last['state'] ?? 'READY').toString().toUpperCase();
       if (status == 'READY') return last;
       if (status == 'FAILED') {
         throw DioException(
@@ -483,7 +636,7 @@ class ApiClient {
   }) async {
     final q = <String, dynamic>{
       'country': country,
-      if (method != null) 'method': method
+      if (method != null) 'method': method,
     };
     final r = await _dio.get(_Api.collectionDetails, queryParameters: q);
     return Map<String, dynamic>.from(_unwrap(r.data));
@@ -498,7 +651,7 @@ class ApiClient {
     final payload = {
       'currency': currency,
       'amount': amount,
-      if (narration != null) 'narration': narration
+      if (narration != null) 'narration': narration,
     };
     final r = await _dio.post(_Api.addMoney, data: payload);
     return Map<String, dynamic>.from(_unwrap(r.data));
@@ -604,6 +757,18 @@ class ApiClient {
     return Map<String, dynamic>.from(_unwrap(r.data));
   }
 
+  /// Short-lived reverify ticket (e.g., to reveal card details).
+  Future<Map<String, dynamic>> reverifyTicket() async {
+    final res = await _dio.post(
+      '${ApiPaths.base}/api/auth/reverify/',
+      data: const {},
+      options: Options(headers: {'Content-Type': 'application/json'}),
+    );
+    final data = res.data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return <String, dynamic>{};
+  }
+
   // ---------- retry helper ----------
   Future<Response<dynamic>> _postWithRetry(
     String path, {
@@ -631,3 +796,25 @@ class ApiClient {
     throw last!;
   }
 }
+
+Future<void> _forceLogoutToLogin() async {
+  if (_forcingLogout) return;
+  _forcingLogout = true;
+  try {
+    await SessionStore.instance.clear();
+  } catch (_) {}
+  try {
+    if (Get.currentRoute != '/login') {
+      Get.snackbar(
+        'Session expired',
+        'Please sign in again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      Get.offAllNamed('/login');
+    }
+  } finally {
+    _forcingLogout = false;
+  }
+}
+
+bool _forcingLogout = false;

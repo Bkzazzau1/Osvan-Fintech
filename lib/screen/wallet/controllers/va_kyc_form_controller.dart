@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:osvan_app/screen/wallet/services/wallets_service.dart';
+import 'package:osvan_app/services/api_client.dart';
 
 class VAKycFormController extends GetxController {
   final formKey = GlobalKey<FormState>();
@@ -20,13 +20,11 @@ class VAKycFormController extends GetxController {
   final isSubmitting = false.obs;
   final errorText = RxnString();
 
-  final _svc = WalletsService();
-
-  // ---- validators ----
-  String? _req(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Required';
-    return null;
-  }
+  // ────────────────────────────────────────────────────────────────────
+  // Validators
+  // ────────────────────────────────────────────────────────────────────
+  String? _req(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Required' : null;
 
   String? _email(String? v) {
     final s = (v ?? '').trim();
@@ -37,35 +35,40 @@ class VAKycFormController extends GetxController {
 
   String? _bvn(String? v) {
     final s = (v ?? '').trim();
-    if (s.length != 11 || int.tryParse(s) == null) {
-      return 'BVN must be 11 digits';
-    }
-    return null;
+    return (s.length == 11 && int.tryParse(s) != null)
+        ? null
+        : 'BVN must be 11 digits';
   }
 
   String? _phone(String? v) {
     final s = (v ?? '').trim();
-    if (s.length < 7 || s.length > 16 || int.tryParse(s) == null) {
-      return 'Enter a valid phone number';
-    }
-    return null;
+    // allow leading + and spaces; 8–20 digits total tolerance
+    final ok = RegExp(r'^[+\d][\d\s]{7,19}$').hasMatch(s);
+    return ok ? null : 'Enter a valid phone number';
   }
 
   String? _dobIfProvidus(String? v) {
     if (bank.value != 'providus') return null; // only required for providus
     final s = (v ?? '').trim();
     if (s.isEmpty) return 'Date of birth is required for Providus';
-    final parts = s.split('-');
-    if (parts.length != 3) return 'Use YYYY-MM-DD';
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return 'Use YYYY-MM-DD';
+    // extra sanity (non-fatal if parse throws)
+    try {
+      DateTime.parse(s);
+    } catch (_) {
+      return 'Invalid date';
+    }
     return null;
   }
 
-  // ---- helpers ----
+  // ────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────
   Future<void> pickDob(BuildContext context) async {
     final now = DateTime.now();
-    final initial = DateTime(now.year - 18, now.month, now.day);
-    final first = DateTime(now.year - 100);
-    final last = DateTime(now.year - 16);
+    final initial = DateTime(now.year - 25, now.month, now.day);
+    final first = DateTime(now.year - 100, 1, 1);
+    final last = DateTime(now.year - 16, now.month, now.day);
     final d = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -78,18 +81,45 @@ class VAKycFormController extends GetxController {
     }
   }
 
-  // simple unique-ish reference if user doesn't edit
-  String _generateRef() {
-    final rnd = Random();
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final salt = rnd.nextInt(1 << 31);
-    return 'osvan-$ts-$salt';
-  }
+  String _generateRef() =>
+      'OSV-VA-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(1 << 20)}';
 
   @override
   void onInit() {
     super.onInit();
     reference.text = _generateRef();
+    _prefillFromUserMe(); // best-effort; silent on failure
+  }
+
+  // Prefill using /api/user/me/
+  Future<void> _prefillFromUserMe() async {
+    try {
+      await ApiClient.ensureInitialized();
+      final me = await ApiClient.shared.getMe();
+      _applyMeMap(me);
+    } catch (_) {/* silent */}
+  }
+
+  void _applyMeMap(dynamic me) {
+    if (me is! Map) return;
+    String pick(List<String> keys) {
+      for (final k in keys) {
+        final v = me[k];
+        if (v is String && v.trim().isNotEmpty) return v.trim();
+      }
+      return '';
+    }
+
+    final fn = pick(['first_name', 'firstName', 'given_name', 'givenName']);
+    final ln =
+        pick(['last_name', 'lastName', 'surname', 'family_name', 'familyName']);
+    final em = pick(['email', 'user_email']);
+    final ph = pick(['phone', 'phone_number', 'mobile', 'msisdn']);
+
+    if (firstName.text.isEmpty && fn.isNotEmpty) firstName.text = fn;
+    if (lastName.text.isEmpty && ln.isNotEmpty) lastName.text = ln;
+    if (customerEmail.text.isEmpty && em.isNotEmpty) customerEmail.text = em;
+    if (phoneNumber.text.isEmpty && ph.isNotEmpty) phoneNumber.text = ph;
   }
 
   Future<void> submit() async {
@@ -98,8 +128,8 @@ class VAKycFormController extends GetxController {
     errorText.value = null;
 
     try {
-      final payload = <String, dynamic>{
-        // Brails field names (exactly as required)
+      final formPayload = <String, dynamic>{
+        // Brails field names (exact)
         'firstName': firstName.text.trim(),
         'lastName': lastName.text.trim(),
         'bvn': bvn.text.trim(),
@@ -110,12 +140,35 @@ class VAKycFormController extends GetxController {
         if (bank.value == 'providus') 'dateOfBirth': dateOfBirth.text.trim(),
       };
 
-      final created = await _svc.createVirtualAccount(kyc: payload);
+      await ApiClient.ensureInitialized();
+      final res =
+          await ApiClient.shared.createVirtualAccount(payload: formPayload);
 
-      // Return created VA object to the caller (AddMoney screen)
-      Get.back(result: created);
+      if (res['ok'] == true) {
+        // Detect inline mode from Add Money
+        final inline =
+            (Get.arguments is Map) && (Get.arguments['inline'] == true);
+
+        if (inline) {
+          // ✅ Inline: return true; Add Money will call loadVA()
+          Get.back(result: true);
+        } else {
+          // Standalone success page
+          final fe = Map<String, dynamic>.from((res['fe'] ?? const {}));
+          Get.offNamed('/va/success', arguments: fe);
+        }
+      } else {
+        final msg =
+            (res['message'] ?? 'Failed to create virtual account').toString();
+        Get.snackbar('Virtual Account', msg,
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 4));
+      }
     } catch (e) {
       errorText.value = e.toString();
+      Get.snackbar('Virtual Account', errorText.value!,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 4));
     } finally {
       isSubmitting.value = false;
     }

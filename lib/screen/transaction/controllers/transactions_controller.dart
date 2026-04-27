@@ -24,6 +24,8 @@ class TransactionsController extends GetxController {
   Future<void> refreshNow() => load(reset: true);
 
   Future<void> load({bool reset = false}) async {
+    final wasEmptyBefore = items.isEmpty;
+
     if (reset) {
       _page = 1;
       _hasMore = true;
@@ -31,9 +33,14 @@ class TransactionsController extends GetxController {
     }
     if (!_hasMore) return;
 
+    // ✅ FIX: first load should show full-screen loader, not "refreshing"
     if (reset) {
-      isRefreshing.value = true;
       error.value = null;
+      if (wasEmptyBefore) {
+        isLoading.value = true;
+      } else {
+        isRefreshing.value = true;
+      }
     } else if (items.isEmpty) {
       isLoading.value = true;
     } else {
@@ -45,7 +52,8 @@ class TransactionsController extends GetxController {
           .fetchPage(page: _page, pageSize: _pageSize);
 
       items.addAll(pageData);
-      _hasMore = pageData.length == _pageSize; // or derive from DRF `next`
+
+      _hasMore = pageData.length == _pageSize; // good enough for now
       if (_hasMore) _page += 1;
     } catch (e) {
       error.value = e.toString();

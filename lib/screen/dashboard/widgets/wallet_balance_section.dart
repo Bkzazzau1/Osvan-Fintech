@@ -1,11 +1,12 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: deprecated_member_use
+
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/core/colors.dart';
 import 'package:osvan_app/screen/wallet/controllers/wallets_controller.dart';
 import 'package:osvan_app/screen/wallet/models/wallet.dart';
-import 'package:osvan_app/screen/wallet/services/wallets_service.dart';
 
 class WalletBalanceSection extends StatefulWidget {
   const WalletBalanceSection({super.key});
@@ -16,310 +17,331 @@ class WalletBalanceSection extends StatefulWidget {
 
 class _WalletBalanceSectionState extends State<WalletBalanceSection> {
   String? _selectedCode; // currency_code like "NGN", "USD"
-  bool _busy = false;
+  bool _obscured = false;
 
-  // Recent transactions (simple maps): [{amount, currency, type, created_at, status, narration}]
-  List<Map<String, dynamic>> _recentTx = const [];
-  bool _txLoading = false;
-  String? _txError;
+  static const _iceBlue = Color(0xFF60A5FA); // luxury ice-blue accent
+  static const _card = Color(0xFF0F172A); // your rule: big card color
 
   @override
   Widget build(BuildContext context) {
     final wc = Get.find<WalletsController>();
 
     return Obx(() {
-      if (wc.isLoading.value) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: osvanGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
-        );
-      }
+      final err = wc.error.value;
 
-      if (wc.error.value != null) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: osvanGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            'Failed to load wallets: ${wc.error.value}',
-            style: const TextStyle(color: Colors.white),
-          ),
-        );
+      if (err != null && wc.wallets.isEmpty) {
+        return _ErrorBox(text: 'Failed to load wallets: $err');
       }
 
       final List<Wallet> wallets = wc.wallets;
       if (wallets.isEmpty) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: osvanGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Text(
-            'No wallets yet',
-            style: TextStyle(color: Colors.white),
-          ),
-        );
+        return const _ErrorBox(text: 'No wallets yet');
       }
 
-      // Default selection: controller primary or first wallet
       final codes = wallets.map((w) => w.currencyCode).toList();
       final primaryFromController = wc.primaryCurrency.value;
+
       final initialCode = (primaryFromController.isNotEmpty &&
               codes.contains(primaryFromController))
           ? primaryFromController
           : wallets.first.currencyCode;
 
-      final prevSelected = _selectedCode;
       _selectedCode = (_selectedCode != null && codes.contains(_selectedCode))
           ? _selectedCode
           : initialCode;
 
-      final selected =
+      final selectedWallet =
           wallets.firstWhere((w) => w.currencyCode == _selectedCode);
 
-      // If the currency selection changed, load its recent transactions
-      if (prevSelected != _selectedCode) {
-        _loadRecentTransactionsFor(_selectedCode!);
-      }
-
-      Future<void> openAddMoneyDialog() async {
-        final amountCtl = TextEditingController();
-        final narrationCtl = TextEditingController();
-        String? errorText;
-        bool submitting = false;
-
-        await showDialog(
-          context: context,
-          barrierDismissible: !submitting,
-          builder: (ctx) {
-            return StatefulBuilder(
-              builder: (ctx, setLocal) {
-                Future<void> submit() async {
-                  if (submitting) return;
-                  final raw = amountCtl.text.trim();
-                  final val = double.tryParse(raw);
-                  if (raw.isEmpty || val == null || val <= 0) {
-                    setLocal(() => errorText = 'Enter a valid amount');
-                    return;
-                  }
-
-                  setLocal(() {
-                    errorText = null;
-                    submitting = true;
-                  });
-
-                  try {
-                    await WalletsService.instance.creditWallet(
-                      currency: selected.currencyCode,
-                      amount: val.toStringAsFixed(2),
-                      narration: narrationCtl.text.trim().isEmpty
-                          ? null
-                          : narrationCtl.text.trim(),
-                    );
-                    await wc.load(); // refresh observable balance
-                    await _loadRecentTransactionsFor(
-                        selected.currencyCode); // refresh tx list
-                    if (mounted) {
-                      Navigator.of(ctx).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Added ${_symbolFor(selected.currencyCode)}${val.toStringAsFixed(2)} to ${selected.currencyCode}',
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _card.withOpacity(0.92),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 22,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: label + primary chip
+                Row(
+                  children: [
+                    Text(
+                      'Wallet Balance',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white.withOpacity(0.92),
                           ),
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    setLocal(() {
-                      errorText = 'Add Money failed: $e';
-                      submitting = false;
-                    });
-                  }
-                }
-
-                return AlertDialog(
-                  title: Text('Add Money (${selected.currencyCode})'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: amountCtl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: InputDecoration(
-                          labelText: 'Amount',
-                          prefixText: _symbolFor(selected.currencyCode),
-                          errorText: errorText,
-                        ),
-                        onSubmitted: (_) => submit(),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: narrationCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Narration (optional)',
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed:
-                          submitting ? null : () => Navigator.of(ctx).pop(),
-                      child: const Text('Cancel'),
                     ),
-                    ElevatedButton(
-                      onPressed: submitting ? null : submit,
-                      child: submitting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Add'),
+                    const Spacer(),
+                    _Pill(
+                      text: 'Primary',
+                      icon: Icons.star_rounded,
+                      fg: _iceBlue,
+                      bg: _iceBlue.withOpacity(0.12),
+                      border: _iceBlue.withOpacity(0.20),
                     ),
                   ],
-                );
-              },
-            );
-          },
-        );
-      }
-
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: osvanGreen,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _SemiBold(
-                text: 'Wallet Balance', color: Colors.white, size: 16),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _Bold(
-                  text:
-                      '${_symbolFor(selected.currencyCode)}${selected.balance.toStringAsFixed(2)}',
-                  color: Colors.white,
-                  size: 28,
                 ),
-                Flexible(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    dropdownColor: osvanGreen,
-                    value: _selectedCode,
-                    icon:
-                        const Icon(Icons.arrow_drop_down, color: Colors.white),
-                    underline: const SizedBox(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _selectedCode = value);
-                      Get.find<WalletsController>().setPrimaryByCode(value);
-                      _loadRecentTransactionsFor(
-                          value); // reload tx when switching currency
-                    },
-                    items: wallets.map((w) {
-                      final code = w.currencyCode;
-                      final symbol = _symbolFor(code);
-                      return DropdownMenuItem(
-                        value: code,
-                        child: Text(
-                          '$symbol ($code)',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
+
+                const SizedBox(height: 10),
+
+                // Balance row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Obx(() {
+                        final code = wc.primaryCurrency.value;
+                        final symbol = _symbolFor(code);
+                        final bal = wc.primaryBalance.value;
+                        final text = _obscured
+                            ? '••••••'
+                            : '$symbol${bal.toStringAsFixed(2)}';
+
+                        return FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            text,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(width: 8),
+                    _IconPillButton(
+                      icon: _obscured
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      onTap: () => setState(() => _obscured = !_obscured),
+                      fg: Colors.white.withOpacity(0.92),
+                      bg: Colors.white.withOpacity(0.06),
+                      border: Colors.white.withOpacity(0.10),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // Currency picker row (modern, no dropdown)
+                Row(
+                  children: [
+                    _Pill(
+                      text: '${_symbolFor(selectedWallet.currencyCode)} '
+                          '${selectedWallet.currencyCode}',
+                      icon: Icons.account_balance_wallet_rounded,
+                      fg: Colors.white.withOpacity(0.92),
+                      bg: Colors.white.withOpacity(0.06),
+                      border: Colors.white.withOpacity(0.10),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => _openCurrencyPicker(
+                          context,
+                          wallets: wallets,
+                          selected: _selectedCode!,
+                          onPick: (code) {
+                            setState(() => _selectedCode = code);
+                            wc.setPrimaryByCode(code);
+                          },
                         ),
-                      );
-                    }).toList(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            color: _iceBlue.withOpacity(0.10),
+                            border:
+                                Border.all(color: _iceBlue.withOpacity(0.22)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.swap_horiz_rounded,
+                                  color: _iceBlue, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Change wallet currency',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.90),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white.withOpacity(0.70)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Optional tiny note (keeps it premium and calm)
+                const SizedBox(height: 10),
+                Text(
+                  'Tap “Change wallet currency” to switch your primary wallet balance.',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 12,
+                    height: 1.2,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                ElevatedButton(
-                  onPressed: wc.load,
-                  child: const Text('Refresh'),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          setState(() => _busy = true);
-                          try {
-                            await openAddMoneyDialog();
-                          } finally {
-                            if (mounted) setState(() => _busy = false);
-                          }
-                        },
-                  icon: _busy
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Add Money'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // --- Recent activity ---
-            _RecentActivity(
-              loading: _txLoading,
-              error: _txError,
-              items: _recentTx,
-              symbolFor: _symbolFor,
-            ),
-          ],
+          ),
         ),
       );
     });
   }
 
-  Future<void> _loadRecentTransactionsFor(String currency) async {
-    setState(() {
-      _txLoading = true;
-      _txError = null;
-    });
-    try {
-      final items = await WalletsService.instance
-          .fetchRecentTransactions(currency: currency, limit: 3);
-      setState(() {
-        _recentTx = items;
-      });
-    } catch (e) {
-      setState(() {
-        _txError = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _txLoading = false);
-      }
-    }
+  Future<void> _openCurrencyPicker(
+    BuildContext context, {
+    required List<Wallet> wallets,
+    required String selected,
+    required ValueChanged<String> onPick,
+  }) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0B1220),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      'Select wallet',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close_rounded,
+                          color: Colors.white.withOpacity(0.9)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: wallets.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: Colors.white.withOpacity(0.06),
+                    ),
+                    itemBuilder: (_, i) {
+                      final w = wallets[i];
+                      final code = w.currencyCode;
+                      final active = code == selected;
+
+                      return ListTile(
+                        onTap: () {
+                          Navigator.pop(context);
+                          onPick(code);
+                        },
+                        leading: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: (active ? _iceBlue : Colors.white)
+                                .withOpacity(active ? 0.16 : 0.06),
+                            border: Border.all(
+                              color: (active ? _iceBlue : Colors.white)
+                                  .withOpacity(active ? 0.22 : 0.10),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _symbolFor(code).isEmpty
+                                ? code.substring(0, 1)
+                                : _symbolFor(code),
+                            style: TextStyle(
+                              color: active
+                                  ? _iceBlue
+                                  : Colors.white.withOpacity(0.9),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          code,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.92),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tap to set as primary',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                          ),
+                        ),
+                        trailing: active
+                            ? Icon(Icons.check_circle_rounded, color: _iceBlue)
+                            : Icon(Icons.circle_outlined,
+                                color: Colors.white.withOpacity(0.25)),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  // quick symbol map; extend as needed
   String _symbolFor(String code) {
     const map = {
       'NGN': '₦',
@@ -343,174 +365,104 @@ class _WalletBalanceSectionState extends State<WalletBalanceSection> {
   }
 }
 
-class _RecentActivity extends StatelessWidget {
-  final bool loading;
-  final String? error;
-  final List<Map<String, dynamic>> items;
-  final String Function(String code) symbolFor;
+class _Pill extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final Color fg;
+  final Color bg;
+  final Color border;
 
-  const _RecentActivity({
-    required this.loading,
-    required this.error,
-    required this.items,
-    required this.symbolFor,
+  const _Pill({
+    required this.text,
+    required this.icon,
+    required this.fg,
+    required this.bg,
+    required this.border,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const _SectionShell(
-        title: 'Recent activity',
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: LinearProgressIndicator(minHeight: 2),
-        ),
-      );
-    }
-    if (error != null) {
-      return _SectionShell(
-        title: 'Recent activity',
-        child: Text(
-          'Could not load transactions: $error',
-          style: const TextStyle(color: Colors.white),
-        ),
-      );
-    }
-    if (items.isEmpty) {
-      return const _SectionShell(
-        title: 'Recent activity',
-        child: Text(
-          'No recent transactions',
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
-
-    return _SectionShell(
-      title: 'Recent activity',
-      child: Column(
-        children: items.take(3).map((tx) {
-          final amount = (tx['amount'] ?? '0').toString();
-          final currency = (tx['currency'] ?? '').toString();
-          final type = (tx['type'] ?? tx['tx_type'] ?? '')
-              .toString()
-              .toUpperCase(); // CREDIT/DEBIT
-          final status = (tx['status'] ?? '').toString().toUpperCase();
-          final created = (tx['created_at'] ?? tx['created'] ?? '').toString();
-          final narration = (tx['narration'] ?? '').toString();
-
-          final sign = type == 'DEBIT' ? '-' : '+';
-          final symbol = symbolFor(currency);
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    type == 'DEBIT' ? Icons.south_west : Icons.north_east,
-                    size: 18,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(narration.isEmpty ? type : narration,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(
-                        created,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '$sign$symbol$amount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  status,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _SectionShell extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _SectionShell({required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.only(top: 10),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.white24, width: 0.5)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: bg,
+        border: Border.all(color: border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          child,
+          Icon(icon, size: 18, color: fg),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              color: fg,
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Bold extends StatelessWidget {
-  final String text;
-  final Color color;
-  final double size;
-  const _Bold({required this.text, required this.color, required this.size});
+class _IconPillButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color fg;
+  final Color bg;
+  final Color border;
+
+  const _IconPillButton({
+    required this.icon,
+    required this.onTap,
+    required this.fg,
+    required this.bg,
+    required this.border,
+  });
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: TextStyle(
-            color: color, fontSize: size, fontWeight: FontWeight.bold),
-      );
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: bg,
+            border: Border.all(color: border),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: fg, size: 22),
+        ),
+      ),
+    );
+  }
 }
 
-class _SemiBold extends StatelessWidget {
+class _ErrorBox extends StatelessWidget {
   final String text;
-  final Color color;
-  final double size;
-  const _SemiBold(
-      {required this.text, required this.color, required this.size});
+  const _ErrorBox({required this.text});
 
   @override
-  Widget build(BuildContext context) => Text(
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: osvanGreen.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: osvanGreen.withOpacity(0.20)),
+      ),
+      child: Text(
         text,
-        style: TextStyle(
-            color: color, fontSize: size, fontWeight: FontWeight.w600),
-      );
+        style: TextStyle(color: Colors.white.withOpacity(0.92)),
+      ),
+    );
+  }
 }

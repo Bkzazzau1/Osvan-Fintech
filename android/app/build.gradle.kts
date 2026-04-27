@@ -1,18 +1,28 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load keystore props (DO NOT hardcode secrets in this file)
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+}
+
 android {
-    namespace = "com.example.osvan_app"
+    namespace = "app.osvarnapps.fintech"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        isCoreLibraryDesugaringEnabled = true // Corrected Kotlin syntax
     }
 
     kotlinOptions {
@@ -20,22 +30,39 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.osvan_app"
+        applicationId = "app.osvarnapps.fintech"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        // Only configure release signing if key.properties exists
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file("upload-keystore.jks") // file is inside android/app/
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
-}
 
-dependencies {
-    add("coreLibraryDesugaring", "com.android.tools:desugar_jdk_libs:2.1.4") // Corrected Kotlin syntax
+    buildTypes {
+        release {
+            // Use release keystore when available
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // Basic hardening (safe defaults)
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+        debug {
+            // keep default debug signing
+        }
+    }
 }
 
 flutter {

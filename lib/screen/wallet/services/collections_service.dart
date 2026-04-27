@@ -1,5 +1,4 @@
-// lib/features/wallets/services/collections_service.dart
-import 'package:dio/dio.dart';
+// lib/screen/wallet/services/collections_service.dart
 import 'package:osvan_app/services/api_client.dart';
 
 class CollectionsService {
@@ -15,8 +14,8 @@ class CollectionsService {
   }
 
   Future<Map<String, String>> getDetails({
-    required String country,
-    String? method, // 'momo' or 'bank' (optional)
+    required String country, // 'Kenya' | 'Uganda'
+    String? method, // 'bank' | 'momo'
   }) async {
     final api = await ApiClient.ensureInitialized();
     final code = _countryToCode(country);
@@ -31,7 +30,8 @@ class CollectionsService {
       // If backend already returns a flat map (preferred)
       // e.g. {"Provider":"M-Pesa","Paybill":"123456","Reference":"OSVAN-..."}
       if (!data.containsKey('status') && !data.containsKey('receiver_value')) {
-        return data.map((k, v) => MapEntry(k, '${v ?? ''}'));
+        // Always return a map of string->string for the view
+        return data.map((k, v) => MapEntry(k.toString(), '${v ?? ''}'));
       }
 
       // Otherwise, support the documented shape:
@@ -45,22 +45,13 @@ class CollectionsService {
         };
       }
 
-      final msg = (data['message'] ?? 'Not supported yet').toString();
-      throw DioException(
-        requestOptions:
-            RequestOptions(path: '/api/v1/wallets/collection-details/'),
-        message: msg,
-        type: DioExceptionType.badResponse,
-      );
-    } on DioException {
-      rethrow;
+      final msg =
+          (data['message'] ?? 'Collection details not supported or unavailable')
+              .toString();
+      throw Exception(msg);
     } catch (e) {
-      throw DioException(
-        requestOptions:
-            RequestOptions(path: '/api/v1/wallets/collection-details/'),
-        message: e.toString(),
-        type: DioExceptionType.unknown,
-      );
+      // Re-throw any exceptions, including those from ApiClient.getCollectionDetails
+      rethrow;
     }
   }
 }

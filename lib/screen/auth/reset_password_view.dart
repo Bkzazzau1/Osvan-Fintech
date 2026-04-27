@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../core/colors.dart';
 import '../../../services/password_reset_service.dart';
 
 class ResetPasswordView extends StatefulWidget {
@@ -34,6 +35,21 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
   static const int _resendSeconds = 60;
   int _countdown = 0;
   Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    final args = (Get.arguments as Map?) ?? {};
+    final emailArg = (args['email'] ?? '').toString().trim();
+    if (emailArg.isNotEmpty) {
+      _emailCtrl.text = emailArg;
+    }
+    final otpAlreadySent = args['otpSent'] == true;
+    if (otpAlreadySent) {
+      _stepTwo = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startCountdown());
+    }
+  }
 
   @override
   void dispose() {
@@ -78,11 +94,16 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
     if (!_formKeyEmail.currentState!.validate()) return;
     setState(() => _requesting = true);
     try {
-      await PasswordResetService.requestOtp(email: _emailCtrl.text);
+      final data = await PasswordResetService.requestOtp(email: _emailCtrl.text);
       Get.snackbar('OTP Sent', 'Check your email for the 6-digit code.',
           backgroundColor: Colors.green, colorText: Colors.white);
       setState(() => _stepTwo = true);
       _startCountdown();
+      final debugCode = data['debugCode'] ?? data['code'];
+      if (debugCode != null) {
+        // ignore: avoid_print
+        print('Password reset debug code: $debugCode');
+      }
     } on PasswordResetError catch (e) {
       Get.snackbar('Error', e.details ?? 'Could not send OTP',
           backgroundColor: Colors.red, colorText: Colors.white);
@@ -125,16 +146,49 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_stepTwo ? 'Verify OTP & Reset' : 'Reset Password'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF151B2B) : Colors.white;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF0B1220), Color(0xFF111827)]
+              : const [Color(0xFFF6FAFF), Color(0xFFFFFFFF)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: _stepTwo ? _buildStepTwo() : _buildStepOne(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(_stepTwo ? 'Verify & Reset' : 'Reset Password'),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          foregroundColor: isDark ? Colors.white : Colors.black,
+          elevation: 0,
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Card(
+                color: surface,
+                elevation: 10,
+                shadowColor: Colors.black.withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  child: _stepTwo ? _buildStepTwo() : _buildStepOne(),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -146,15 +200,20 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Enter your account email to receive an OTP.',
-              style: TextStyle(fontSize: 16)),
+          Text(
+            'We will send a 6-digit code to your email to verify ownership.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: Colors.grey[700]),
+          ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'Email',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.alternate_email),
             ),
             validator: _emailValidator,
           ),
@@ -164,8 +223,11 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             child: ElevatedButton(
               onPressed: _requesting ? null : _requestOtp,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
+                backgroundColor: osvanGreen,
                 padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _requesting
                   ? const SizedBox(
@@ -174,12 +236,12 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Text('Send OTP'),
-            ),
+              ),
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => Get.offAllNamed('/login'),
-            child: const Text('Back to Login'),
+            child: const Text('Back to login'),
           ),
         ],
       ),
@@ -194,7 +256,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('We sent a 6-digit code to ${_emailCtrl.text.trim()}.',
-              style: const TextStyle(fontSize: 16)),
+              style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 16),
           TextFormField(
             controller: _otpCtrl,
@@ -205,7 +267,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             ],
             decoration: const InputDecoration(
               labelText: 'OTP (6 digits)',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.verified_outlined),
             ),
             validator: (v) {
               if (_req(v, 'OTP') != null) return 'Enter OTP';
@@ -219,7 +281,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'New Password',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock_outline),
             ),
             validator: _passwordValidator,
           ),
@@ -229,7 +291,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'Confirm New Password',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock_reset_outlined),
             ),
             validator: (v) =>
                 v != _passwordCtrl.text ? 'Passwords do not match' : null,
@@ -250,8 +312,11 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             child: ElevatedButton(
               onPressed: _resetting ? null : _submitReset,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
+                backgroundColor: osvanGreen,
                 padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _resetting
                   ? const SizedBox(

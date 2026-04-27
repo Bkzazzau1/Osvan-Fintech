@@ -1,62 +1,80 @@
-import 'dart:convert';
+// lib/services/change_password_service.dart
+import 'package:dio/dio.dart';
 
-import 'package:http/http.dart' as http;
-import 'package:osvan_app/screen/wallet/services/config_service.dart';
-
-import '../services/auth_service.dart'; // AuthService.getToken()
+import 'api/api_paths.dart';
+import 'api/core_client.dart';
 
 class ChangePasswordError implements Exception {
   final String code;
   final String? details;
   ChangePasswordError(this.code, {this.details});
+
   @override
   String toString() =>
       'ChangePasswordError($code${details != null ? ": $details" : ""})';
 }
 
 class ChangePasswordService {
-  static const _path = '/v1/auth/password/change/';
+  static String _msg(dynamic data, {String fallback = 'Request failed'}) {
+    try {
+      if (data is Map) {
+        final m = Map<String, dynamic>.from(data);
+        final msg =
+            (m['detail'] ?? m['error'] ?? m['message'] ?? fallback).toString();
+        if (msg.trim().isNotEmpty) return msg.trim();
 
-  static Uri _url() => ConfigService.apiUri(_path);
+        // handle field errors: {"old_password":["wrong password"]}
+        if (m.isNotEmpty) {
+          m.keys.first.toString();
+          final v = m[m.keys.first];
+          if (v is List && v.isNotEmpty) return v.first.toString();
+          if (v != null) return v.toString();
+        }
+      } else if (data is String && data.trim().isNotEmpty) {
+        return data.trim();
+      }
+    } catch (_) {}
+    return fallback;
+  }
 
   static Future<void> change({
     required String oldPassword,
     required String newPassword,
   }) async {
-    final token = await AuthService.getToken();
-    final res = await http.post(
-      _url(),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
-        'old_password': oldPassword,
-        'new_password': newPassword,
-      }),
-    );
+    await CoreClient.ensure();
 
-    if (res.statusCode == 200 || res.statusCode == 204) return;
-
-    if (res.statusCode == 400) {
-      final msg = _msg(res.body);
-      throw ChangePasswordError('validation', details: msg);
-    }
-    if (res.statusCode == 401) {
-      throw ChangePasswordError('unauthorized',
-          details: 'Session expired. Please log in again.');
-    }
-    throw ChangePasswordError('server_${res.statusCode}', details: res.body);
-  }
-
-  static String _msg(String body) {
     try {
-      final m = jsonDecode(body) as Map<String, dynamic>;
-      return (m['error'] ?? m['detail'] ?? m['message'] ?? 'validation_error')
-          .toString();
-    } catch (_) {
-      return 'validation_error';
+      await CoreClient.I.dio.post(
+        ApiPaths.changePassword,
+        data: {
+          'old_password': oldPassword,
+          'new_password': newPassword,
+        },
+      );
+      return;
+    } on DioException catch (e) {
+      final sc = e.response?.statusCode ?? 0;
+
+      if (sc == 401) {
+        throw ChangePasswordError(
+          'unauthorized',
+          details: _msg(e.response?.data, fallback: 'Please log in again.'),
+        );
+      }
+
+      if (sc == 400) {
+        throw ChangePasswordError(
+          'validation',
+          details: _msg(e.response?.data, fallback: 'validation_error'),
+        );
+      }
+
+      throw ChangePasswordError(
+        'server',
+        details: _msg(e.response?.data, fallback: 'Could not change password'),
+      );
+    } catch (e) {
+      throw ChangePasswordError('server', details: e.toString());
     }
   }
 }

@@ -1,11 +1,20 @@
 // lib/screen/auth/login_view.dart
+// Premium auth UI (glass + luxury card) + biometrics + dark-mode toggle
+// - Keeps your AuthController flow untouched (auth.login() -> /main)
+// - Stores last email in GetStorage
+//
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
-import 'package:osvan_app/controller/theme_controller.dart';
-import 'package:osvan_app/screen/wallet/services/wallets_service.dart';
-import 'package:osvan_app/services/auth_service.dart'; // ✅ unified AuthService
+import 'package:osvan_app/utils/nav.dart';
+import 'package:get_storage/get_storage.dart';
+import 'package:osvan_app/controller/auth_controller.dart';
+import 'package:osvan_app/core/colors.dart';
 import 'package:osvan_app/services/biometric_service.dart';
 
 class LoginView extends StatefulWidget {
@@ -18,85 +27,19 @@ class LoginView extends StatefulWidget {
 class _LoginViewState extends State<LoginView> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _box = GetStorage();
   final _formKey = GlobalKey<FormState>();
+
   bool _obscurePassword = true;
-  bool _useFingerprint = false;
-  bool _loading = false;
+  bool _uiLoading = false;
 
-  final themeController = Get.find<ThemeController>();
+  @override
+  void initState() {
+    super.initState();
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    // Optional biometric gate
-    if (_useFingerprint) {
-      final ok = await BiometricService.authenticateUser(useBiometrics: true);
-      if (!ok) {
-        Get.snackbar(
-          "Access Denied",
-          "Fingerprint authentication failed",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.redAccent,
-          colorText: Colors.white,
-          icon: const Icon(Icons.error, color: Colors.white),
-        );
-        return;
-      }
-    }
-
-    setState(() => _loading = true);
-    try {
-      // Real backend login -> Django SimpleJWT (or your custom login)
-      final result = await AuthService.login(
-          email: email, password: password, username: '');
-
-      String? access;
-      String? refresh;
-
-      if (result is String) {
-        access = result as String?;
-      } else {
-        access = (result['access'] ?? result['token'] ?? result['access_token'])
-            ?.toString();
-      }
-      refresh = (result['refresh'] ?? result['refresh_token'])?.toString();
-
-      if (access == null || access.isEmpty) {
-        throw Exception("Login response missing access token");
-      }
-
-      await AuthService.setTokens(access: access, refresh: refresh);
-
-      // Fire-and-forget: prefetch wallets to make /main feel instant
-      unawaited(Future(() async {
-        try {
-          await WalletsService.instance.fetchWallets();
-        } catch (_) {}
-      }));
-
-      Get.snackbar(
-        "Login Successful",
-        "Welcome back",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
-      Get.offAllNamed('/main');
-    } catch (e) {
-      Get.snackbar(
-        'Login Failed',
-        e.toString().replaceFirst('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
-        icon: const Icon(Icons.error, color: Colors.white),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    final savedEmail = _box.read<String>('last_login_email') ?? '';
+    if (savedEmail.isNotEmpty) _emailController.text = savedEmail;
+    _passwordController.clear();
   }
 
   @override
@@ -106,349 +49,524 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
+  Future<void> _handleLoginViaController({required bool biometric}) async {
+    final auth = Get.find<AuthController>();
+    if (_uiLoading || auth.isLoading.value) return;
+    if (!_formKey.currentState!.validate()) return;
+    auth.errorText.value = null;
+    debugPrint('[LoginView] starting login (biometric=$biometric)');
+
+    if (biometric) {
+      final ready = await BiometricService.isBiometricReady();
+      if (!ready) {
+        _snack(
+          title: "Unavailable",
+          msg:
+              "Fingerprint/Face ID is not set on this device. Please enable it in phone settings.",
+          bg: Colors.orange,
+          icon: Icons.fingerprint,
+        );
+        return;
+      }
+
+      final ok = await BiometricService.authenticateBiometric();
+      if (!ok) {
+        _snack(
+          title: "Access denied",
+          msg: BiometricService.lastErrorMessage ??
+              "Fingerprint authentication failed",
+          bg: Colors.redAccent,
+          icon: Icons.error,
+        );
+        return;
+      }
+    }
+
+    setState(() => _uiLoading = true);
+    try {
+      auth.emailCtrl.text = _emailController.text.trim();
+      auth.passwordCtrl.text = _passwordController.text;
+
+      await auth.login(); // tokens + navigation (/main)
+
+      _box.write('last_login_email', _emailController.text.trim());
+      _passwordController.clear();
+    } catch (e) {
+      auth.errorText.value =
+          e.toString().replaceFirst('Exception: ', '').trim();
+      debugPrint('[LoginView] login caught error: ${auth.errorText.value}');
+      _snack(
+        title: 'Login failed',
+        msg: e.toString().replaceFirst('Exception: ', ''),
+        bg: Colors.redAccent,
+        icon: Icons.error,
+      );
+    } finally {
+      debugPrint(
+          '[LoginView] stopping loaders uiLoading=$_uiLoading ctrlLoading=${auth.isLoading.value}');
+      if (mounted) setState(() => _uiLoading = false);
+      auth.isLoading.value = false;
+    }
+  }
+
+  void _snack({
+    required String title,
+    required String msg,
+    required Color bg,
+    required IconData icon,
+  }) {
+    Get.snackbar(
+      title,
+      msg,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: bg,
+      colorText: Colors.white,
+      icon: Icon(icon, color: Colors.white),
+      margin: const EdgeInsets.all(12),
+      duration: const Duration(seconds: 4),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Get.back(),
+          onPressed: () => safeBack(),
         ),
-        elevation: 0,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        actions: [],
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Image.asset(
-                            'assets/logo.png',
-                            width: 180,
-                            height: 60,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Center(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Welcome Back!',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Login to continue to Osvan.',
-                                style: TextStyle(fontSize: 16),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? 'Please enter your email'
-                              : null,
-                        ),
-                        const SizedBox(height: 20),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () {
-                                setState(
-                                    () => _obscurePassword = !_obscurePassword);
-                              },
-                            ),
-                          ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? 'Please enter your password'
-                              : null,
-                        ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => Get.toNamed('/forgot-password'),
-                            child: const Text('Forgot Password?'),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _loading ? null : _handleLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green[700],
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: _loading
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white),
-                                      )
-                                    : const Text(
-                                        'Login',
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _loading
-                                  ? null
-                                  : () async {
-                                      _useFingerprint = true;
-                                      await _handleLogin();
-                                      _useFingerprint = false;
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green[700],
-                                padding: const EdgeInsets.all(16),
-                                shape: const CircleBorder(),
-                              ),
-                              child: const Icon(Icons.fingerprint,
-                                  size: 24, color: Colors.white),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Dark Mode'),
-                            Obx(
-                              () => Switch(
-                                value: themeController.isDarkMode,
-                                onChanged: (value) =>
-                                    themeController.toggleTheme(value),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text("Don't have an account?"),
-                            TextButton(
-                              onPressed: () => Get.toNamed('/register'),
-                              child: const Text('Register'),
-                            ),
-                          ],
-                        ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: const [Color(0xFF0B1220), Color(0xFF111827)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // subtle glow blobs
+            Positioned(
+              top: -80,
+              left: -60,
+              child: _GlowBlob(
+                color: osvanGreen.withOpacity(.18),
+                size: 220,
+              ),
+            ),
+            Positioned(
+              bottom: -90,
+              right: -70,
+              child: _GlowBlob(
+                color: const Color(0xFF60A5FA).withOpacity(.16),
+                size: 260,
+              ),
+            ),
 
-                        // ------------------------
-                        // 🔧 Test Console (VA + Credit)
-                        // ------------------------
-                        const Divider(height: 32),
-                        const Text('Test Console (VA + Credit)',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        _ShortTestPanel(),
-                      ],
+            Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: _GlassCard(
+                    child: _AuthCard(
+                      emailController: _emailController,
+                      passwordController: _passwordController,
+                      formKey: _formKey,
+                      obscurePassword: _obscurePassword,
+                      uiLoading: _uiLoading,
+                      onToggleObscure: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                      onLogin: () =>
+                          _handleLoginViaController(biometric: false),
+                      onBiometricLogin: () =>
+                          _handleLoginViaController(biometric: true),
                     ),
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ---------------------------
-// Internal: Short test panel
-// ---------------------------
-class _ShortTestPanel extends StatefulWidget {
-  @override
-  State<_ShortTestPanel> createState() => _ShortTestPanelState();
-}
+class _AuthCard extends StatelessWidget {
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final GlobalKey<FormState> formKey;
+  final bool obscurePassword;
+  final bool uiLoading;
+  final VoidCallback onToggleObscure;
+  final Future<void> Function() onLogin;
+  final Future<void> Function() onBiometricLogin;
 
-class _ShortTestPanelState extends State<_ShortTestPanel> {
-  final tokenCtrl = TextEditingController();
-  final walletCtrl = TextEditingController();
-  final currencyCtrl = TextEditingController(text: 'NGN'); // kept for credit
-  final amountCtrl = TextEditingController(text: '10.00');
-  final logs = <String>[];
-  void log(Object m) => setState(() => logs.add(m.toString()));
-
-  @override
-  void dispose() {
-    tokenCtrl.dispose();
-    walletCtrl.dispose();
-    currencyCtrl.dispose();
-    amountCtrl.dispose();
-    super.dispose();
-  }
+  const _AuthCard({
+    required this.emailController,
+    required this.passwordController,
+    required this.formKey,
+    required this.obscurePassword,
+    required this.uiLoading,
+    required this.onToggleObscure,
+    required this.onLogin,
+    required this.onBiometricLogin,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final wallets = WalletsService.instance;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: tokenCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Paste ACCESS token (JWT)',
-            border: OutlineInputBorder(),
-          ),
+    final th = Theme.of(context);
+    final auth = Get.find<AuthController>();
+
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(
+        color: Colors.white.withOpacity(0.10),
+      ),
+    );
+
+    InputDecoration dec({
+      required String label,
+      required IconData icon,
+      Widget? suffix,
+    }) {
+      return InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffix,
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border.copyWith(
+          borderSide: const BorderSide(color: osvanGreen, width: 1.3),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  await AuthService.setTokens(access: tokenCtrl.text.trim());
-                  log('Token set.');
-                } catch (e) {
-                  log('Set token error: $e');
-                }
-              },
-              child: const Text('Set Token'),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final list = await wallets.fetchWallets();
-                  log('Wallets: ${list.map((w) => w.id).toList()}');
-                } catch (e) {
-                  log('List wallets error: $e');
-                }
-              },
-              child: const Text('List Wallets'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: walletCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Wallet ID (optional for display/logs)',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            // Currency (kept for credit)
-            SizedBox(
-              width: 110,
-              child: TextField(
-                controller: currencyCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Currency',
-                  border: OutlineInputBorder(),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
+      child: Form(
+        key: formKey,
+        child: Obx(() {
+          final showLoading = uiLoading || auth.isLoading.value;
+          final err = auth.errorText.value;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Brand
+              Column(
+                children: [
+                  Image.asset(
+                    'assets/logo.png',
+                    width: 160,
+                    height: 56,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 52,
+                      color: (Colors.white).withOpacity(0.35),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Welcome back',
+                    style: th.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Login to continue to Osvan',
+                    style: th.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(0.75),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SvgPicture.asset(
+                        'assets/icons/fingerprint.svg',
+                        height: 18,
+                        width: 18,
+                        colorFilter: ColorFilter.mode(
+                          (Colors.white).withOpacity(0.35),
+                          BlendMode.srcIn,
+                        ),
+                        placeholderBuilder: (_) => Icon(
+                          Icons.fingerprint,
+                          size: 18,
+                          color: (Colors.white).withOpacity(0.35),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Secure login ready',
+                        style: TextStyle(
+                          color: (Colors.white).withOpacity(0.45),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (err != null && err.trim().isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.redAccent.withOpacity(0.5),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.redAccent, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          err,
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 22),
+
+              // Email
+              TextFormField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                enabled: !showLoading,
+                decoration:
+                    dec(label: 'Email address', icon: Icons.email_outlined),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  final ok =
+                      RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim());
+                  return ok ? null : 'Enter a valid email';
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // Password
+              TextFormField(
+                controller: passwordController,
+                obscureText: obscurePassword,
+                textInputAction: TextInputAction.done,
+                enabled: !showLoading,
+                decoration: dec(
+                  label: 'Password',
+                  icon: Icons.lock_outline,
+                  suffix: IconButton(
+                    onPressed: showLoading ? null : onToggleObscure,
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                  ),
+                ),
+                validator: (v) => (v == null || v.isEmpty)
+                    ? 'Please enter your password'
+                    : null,
+                onFieldSubmitted: (_) => showLoading ? null : onLogin(),
+              ),
+
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed:
+                      showLoading ? null : () => Get.toNamed('/forgot-password'),
+                  child: const Text('Forgot password?'),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  // ✅ WalletsService.createVirtualAccount() has no 'currency' param
-                  final va = await wallets.createVirtualAccount();
-                  log('VA: $va');
-                } catch (e) {
-                  log('Create/Fetch VA error: $e');
-                }
-              },
-              child: const Text('Create/Fetch VA'),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 140,
-              child: TextField(
-                controller: amountCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                ),
+              const SizedBox(height: 8),
+
+              // Login actions
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: showLoading ? null : onLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: osvanGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: showLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Login',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Tooltip(
+                    message: 'Login with biometrics',
+                    child: ElevatedButton(
+                      onPressed: showLoading ? null : onBiometricLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.08),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                        shape: const CircleBorder(),
+                        elevation: 0,
+                      ),
+                      child: const Icon(Icons.fingerprint, size: 22),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final ccy = (currencyCtrl.text.trim().isEmpty)
-                      ? 'NGN'
-                      : currencyCtrl.text.trim().toUpperCase();
-                  // ✅ creditWallet expects {currency, amount}
-                  final r = await wallets.creditWallet(
-                    currency: ccy,
-                    amount: amountCtrl.text.trim(),
-                  );
-                  log('Credit OK [$ccy]: $r');
-                } catch (e) {
-                  log('Credit error: $e');
-                }
-              },
-              child: const Text('Credit Wallet'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          height: 160,
-          padding: const EdgeInsets.all(8),
+
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Divider(
+                      color: (Colors.white).withOpacity(0.12),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'or',
+                      style: TextStyle(
+                        color: (Colors.white).withOpacity(0.55),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Divider(
+                      color: (Colors.white).withOpacity(0.12),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Don't have an account?"),
+                  TextButton(
+                    onPressed:
+                        showLoading ? null : () => Get.toNamed('/register'),
+                    child: const Text('Register'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  const _GlassCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: ListView.builder(
-            itemCount: logs.length,
-            itemBuilder: (_, i) => Text(
-              logs[i],
-              style: const TextStyle(fontFamily: 'monospace'),
+            color: const Color(0xFF0F172A).withOpacity(0.86),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.10),
             ),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 18,
+                color: Colors.black.withOpacity(0.30),
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
+          child: child,
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _GlowBlob({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 60,
+              spreadRadius: 10,
+              color: color.withOpacity(0.55),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
