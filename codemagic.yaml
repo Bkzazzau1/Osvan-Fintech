@@ -28,14 +28,11 @@ workflows:
         script: flutter pub get
 
       - name: Build iOS release
-        script: flutter build ipa --release
-
-      - name: Check IPA file
-        script: |
-          ls -R build/ios/ipa
+        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/**/*.ipa
+      - build/ios/archive/*.xcarchive
 
     publishing:
       app_store_connect:
