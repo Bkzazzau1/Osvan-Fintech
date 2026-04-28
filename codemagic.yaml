@@ -13,7 +13,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.osvan.fintech
-        team_id: 9M78583J9Z
 
     scripts:
       - name: Set up keychain
