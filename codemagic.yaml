@@ -22,8 +22,7 @@ workflows:
         script: |
           app-store-connect fetch-signing-files com.osvan.fintech \
             --type IOS_APP_STORE \
-            --create \
-            --force
+            --create
 
       - name: Add certificates to keychain
         script: keychain add-certificates
