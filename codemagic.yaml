@@ -39,5 +39,3 @@ workflows:
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
-        app:
-          app_id: 6764260337
