@@ -14,8 +14,6 @@
 //
 // ignore_for_file: deprecated_member_use, unused_element
 
-import 'dart:ui' as ui;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -242,9 +240,19 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
         children: [
           const Positioned.fill(child: LuxuryBackground()),
           Positioned.fill(
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(color: Colors.black.withOpacity(0.35)),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    kCryptoSurface.withOpacity(0.92),
+                    const Color(0xFF08111F).withOpacity(0.86),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(color: Colors.white.withOpacity(0.07)),
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
           ),
           Padding(
@@ -267,7 +275,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
                           ),
                         ),
                       ),
-                      _Pill(text: '', color: kIceBlue),
+                      _Pill(text: 'ADDRESS', color: kIceBlue),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -337,7 +345,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
                     // QR preview (high-touch)
                     _QrCard(
                       data: _buildQrPayload(),
-                      headerLeft: ' � ',
+                      headerLeft: '${_coin.value} • ${_chain.value}',
                       headerRight: _tagText(),
                     ),
                     const SizedBox(height: 10),
@@ -364,7 +372,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
 
                     const SizedBox(height: 8),
                     Text(
-                      'Send only  on . Deposits are credited after confirmations.',
+                      'Send only ${_coin.value} on ${_chain.value}. Deposits are credited after confirmations.',
                       style: theme.textTheme.bodySmall?.copyWith(color: muted),
                       textAlign: TextAlign.center,
                     ),

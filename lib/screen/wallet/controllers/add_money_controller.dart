@@ -35,7 +35,9 @@ class AddMoneyController extends GetxController {
       // Never call VA endpoints for KES/UGX
       status.value = 'PENDING';
       va.value = null;
-      _setOk('Collections coming soon for ${selectedCurrency.value}.');
+      _setOk(
+        'Collections are currently unavailable for ${selectedCurrency.value}.',
+      );
       return;
     }
 

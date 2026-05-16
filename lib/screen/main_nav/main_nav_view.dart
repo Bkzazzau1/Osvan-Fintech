@@ -1,16 +1,16 @@
 // ignore_for_file: deprecated_member_use
 
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/core/colors.dart';
+import 'package:osvan_app/routes/app_routes.dart';
 import 'package:osvan_app/screen/cards/view/cards_view.dart';
 import 'package:osvan_app/screen/dashboard/controller/dashboard_controller.dart';
 import 'package:osvan_app/screen/dashboard/view/dashboard_view.dart';
 import 'package:osvan_app/screen/settings/view/settings_view.dart';
-import 'package:share_plus/share_plus.dart';
 
 /// Luxury Dark constants (single mode)
 const kDarkBg = Color(0xFF070B14);
@@ -51,7 +51,9 @@ class _MainNavViewState extends State<MainNavView>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _dc.loadUser());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_dc.loadUser());
+    });
   }
 
   void _onTabTapped(int index) {
@@ -126,29 +128,25 @@ class _MainNavViewState extends State<MainNavView>
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: kDarkSurface.withOpacity(0.84),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.45),
-                        offset: const Offset(0, 10),
-                        blurRadius: 28,
-                      ),
-                    ],
-                  ),
-                  child: _AnimatedPillNavBar(
-                    items: _items,
-                    index: _selectedIndex,
-                    onTap: _onTabTapped,
-                  ),
+            child: RepaintBoundary(
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kDarkSurface.withOpacity(0.94),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.36),
+                      offset: const Offset(0, 8),
+                      blurRadius: 18,
+                    ),
+                  ],
+                ),
+                child: _AnimatedPillNavBar(
+                  items: _items,
+                  index: _selectedIndex,
+                  onTap: _onTabTapped,
                 ),
               ),
             ),
@@ -177,127 +175,101 @@ class _GlassTopBar extends StatelessWidget {
             : 'Account & preferences';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            decoration: BoxDecoration(
-              color: kDarkSurface.withOpacity(0.78),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
-            ),
-            child: Row(
-              children: [
-                // Brand dot + name
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: kIceBlue.withOpacity(0.14),
-                    border: Border.all(color: kIceBlue.withOpacity(0.18)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: kIceBlue,
-                      boxShadow: [
-                        BoxShadow(
-                          color: kIceBlue.withOpacity(0.35),
-                          blurRadius: 14,
-                        ),
-                      ],
-                    ),
-                  ),
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: RepaintBoundary(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          decoration: BoxDecoration(
+            color: kDarkSurface.withOpacity(0.88),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.22),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Obx(
+                () => _UserAvatar(
+                  imageUrl: dc.user.value?.avatarUrl ?? '',
+                  name: dc.user.value?.displayName ?? '',
                 ),
-                const SizedBox(width: 12),
+              ),
+              const SizedBox(width: 12),
 
-                // Greeting
-                Expanded(
-                  child: Obx(() {
-                    final u = dc.user.value;
+              // Greeting
+              Expanded(
+                child: Obx(() {
+                  final u = dc.user.value;
 
-                    String pickName() {
-                      if (u == null) return 'there';
-                      final display = (u.displayName).trim();
-                      if (display.isNotEmpty) return display;
+                  String pickName() {
+                    if (u == null) return 'there';
+                    final display = (u.displayName).trim();
+                    if (display.isNotEmpty) return display;
 
-                      final first = (u.firstName).trim();
-                      if (first.isNotEmpty) return first;
+                    final first = (u.firstName).trim();
+                    if (first.isNotEmpty) return first;
 
-                      final user = (u.username).trim();
-                      if (user.isNotEmpty) return user;
+                    final user = (u.username).trim();
+                    if (user.isNotEmpty) return user;
 
-                      final email = (u.email).trim();
-                      if (email.isNotEmpty) return email.split('@').first;
+                    final email = (u.email).trim();
+                    if (email.isNotEmpty) return email.split('@').first;
 
-                      return 'there';
-                    }
+                    return 'there';
+                  }
 
-                    final name = pickName();
+                  final name = pickName();
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello $name',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: 0.1,
-                          ),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hello $name',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 0.1,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Colors.white.withOpacity(0.65),
-                            fontWeight: FontWeight.w600,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.60),
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
-                    );
-                  }),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+
+              // Actions (match your old behavior)
+              if (selectedIndex == 0) ...[
+                _TopIcon(
+                  tooltip: 'Notifications',
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () => Get.toNamed('/notifications'),
                 ),
-
-                // Actions (match your old behavior)
-                if (selectedIndex == 0) ...[
-                  _TopIcon(
-                    tooltip: 'Share Osvan',
-                    icon: Icons.share_outlined,
-                    onTap: () {
-                      Share.share(
-                        'Check out the Osvan App – A better way to manage your money.\nhttps://osvan.africa',
-                        subject: 'Join Osvan!',
-                      );
-                    },
-                  ),
-                  _TopIcon(
-                    tooltip: 'Notifications',
-                    icon: Icons.notifications_none_rounded,
-                    onTap: () => Get.toNamed('/notifications'),
-                  ),
-                ] else if (selectedIndex == 1) ...[
-                  _TopIcon(
-                    tooltip: 'Add Card',
-                    icon: Icons.add_card_outlined,
-                    onTap: () => Get.toNamed('/cards/new'),
-                  ),
-                ],
+              ] else if (selectedIndex == 1) ...[
+                _TopIcon(
+                  tooltip: 'Add Card',
+                  icon: Icons.add_card_outlined,
+                  onTap: () => Get.toNamed(AppRoutes.createCard),
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
@@ -326,13 +298,100 @@ class _TopIcon extends StatelessWidget {
         onTap: onTap,
         child: Container(
           margin: const EdgeInsets.only(left: 6),
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withOpacity(0.06),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.white.withOpacity(0.07),
+            border: Border.all(color: Colors.white.withOpacity(0.09)),
           ),
-          child: Icon(icon, color: Colors.white.withOpacity(0.92), size: 20),
+          child: Icon(icon, color: Colors.white.withOpacity(0.92), size: 21),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  final String imageUrl;
+  final String name;
+
+  const _UserAvatar({
+    required this.imageUrl,
+    required this.name,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _initials(name);
+    final hasImage = imageUrl.trim().isNotEmpty;
+
+    return Container(
+      width: 44,
+      height: 44,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [
+            kIceBlue.withOpacity(0.88),
+            osvanGreen.withOpacity(0.78),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: kIceBlue.withOpacity(0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(color: kDarkSurface2),
+          child: hasImage
+              ? Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _Initials(initials: initials),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return _Initials(initials: initials);
+                  },
+                )
+              : _Initials(initials: initials),
+        ),
+      ),
+    );
+  }
+
+  String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'O';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+class _Initials extends StatelessWidget {
+  final String initials;
+
+  const _Initials({required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 15,
         ),
       ),
     );
@@ -390,14 +449,19 @@ class _GlowBlob extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            width: size,
-            height: size,
-            color: color.withOpacity(opacity),
-          ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withOpacity(opacity),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(opacity),
+              blurRadius: 80,
+              spreadRadius: 24,
+            ),
+          ],
         ),
       ),
     );

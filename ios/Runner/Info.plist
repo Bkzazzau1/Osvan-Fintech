@@ -22,6 +22,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -45,7 +47,19 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>mailto</string>
+		<string>tel</string>
+		<string>sms</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Osvan needs camera access so you can capture identity documents and profile photos for account verification.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>We use Face ID to protect your account and transactions.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Osvan needs photo library access so you can upload identity documents and profile photos for account verification.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Osvan may save exported receipts or images to your photo library when you choose to save them.</string>
 </dict>
 </plist>

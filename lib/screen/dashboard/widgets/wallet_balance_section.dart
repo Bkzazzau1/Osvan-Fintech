@@ -1,7 +1,5 @@
 // ignore_for_file: deprecated_member_use
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/core/colors.dart';
@@ -21,6 +19,8 @@ class _WalletBalanceSectionState extends State<WalletBalanceSection> {
 
   static const _iceBlue = Color(0xFF60A5FA); // luxury ice-blue accent
   static const _card = Color(0xFF0F172A); // your rule: big card color
+  static const _deepBlue = Color(0xFF172554);
+  static const _green = Color(0xFF10B981);
 
   @override
   Widget build(BuildContext context) {
@@ -30,12 +30,22 @@ class _WalletBalanceSectionState extends State<WalletBalanceSection> {
       final err = wc.error.value;
 
       if (err != null && wc.wallets.isEmpty) {
-        return _ErrorBox(text: 'Failed to load wallets: $err');
+        return _ErrorBox(
+          text: err,
+          onRetry: () => wc.load(),
+        );
+      }
+
+      if (wc.isLoading.value && wc.wallets.isEmpty) {
+        return const _LoadingBox();
       }
 
       final List<Wallet> wallets = wc.wallets;
       if (wallets.isEmpty) {
-        return const _ErrorBox(text: 'No wallets yet');
+        return _ErrorBox(
+          text: 'Wallets are being prepared. Pull down to refresh.',
+          onRetry: () => wc.load(),
+        );
       }
 
       final codes = wallets.map((w) => w.currencyCode).toList();
@@ -53,164 +63,175 @@ class _WalletBalanceSectionState extends State<WalletBalanceSection> {
       final selectedWallet =
           wallets.firstWhere((w) => w.currencyCode == _selectedCode);
 
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _card.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withOpacity(0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 22,
-                  offset: const Offset(0, 14),
-                ),
+      return RepaintBoundary(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                _card.withOpacity(0.98),
+                _deepBlue.withOpacity(0.74),
+                const Color(0xFF08111F).withOpacity(0.98),
               ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: label + primary chip
-                Row(
-                  children: [
-                    Text(
-                      'Wallet Balance',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white.withOpacity(0.92),
-                          ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _iceBlue.withOpacity(0.14)),
+            boxShadow: [
+              BoxShadow(
+                color: _iceBlue.withOpacity(0.08),
+                blurRadius: 22,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _green.withOpacity(0.12),
+                      border: Border.all(color: _green.withOpacity(0.18)),
                     ),
-                    const Spacer(),
-                    _Pill(
-                      text: 'Primary',
-                      icon: Icons.star_rounded,
-                      fg: _iceBlue,
-                      bg: _iceBlue.withOpacity(0.12),
-                      border: _iceBlue.withOpacity(0.20),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: _green,
+                      size: 20,
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // Balance row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Obx(() {
-                        final code = wc.primaryCurrency.value;
-                        final symbol = _symbolFor(code);
-                        final bal = wc.primaryBalance.value;
-                        final text = _obscured
-                            ? '••••••'
-                            : '$symbol${bal.toStringAsFixed(2)}';
-
-                        return FittedBox(
-                          alignment: Alignment.centerLeft,
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            text,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 34,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.6,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    _IconPillButton(
-                      icon: _obscured
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      onTap: () => setState(() => _obscured = !_obscured),
-                      fg: Colors.white.withOpacity(0.92),
-                      bg: Colors.white.withOpacity(0.06),
-                      border: Colors.white.withOpacity(0.10),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                // Currency picker row (modern, no dropdown)
-                Row(
-                  children: [
-                    _Pill(
-                      text: '${_symbolFor(selectedWallet.currencyCode)} '
-                          '${selectedWallet.currencyCode}',
-                      icon: Icons.account_balance_wallet_rounded,
-                      fg: Colors.white.withOpacity(0.92),
-                      bg: Colors.white.withOpacity(0.06),
-                      border: Colors.white.withOpacity(0.10),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => _openCurrencyPicker(
-                          context,
-                          wallets: wallets,
-                          selected: _selectedCode!,
-                          onPick: (code) {
-                            setState(() => _selectedCode = code);
-                            wc.setPrimaryByCode(code);
-                          },
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: _iceBlue.withOpacity(0.10),
-                            border:
-                                Border.all(color: _iceBlue.withOpacity(0.22)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.swap_horiz_rounded,
-                                  color: _iceBlue, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Change wallet currency',
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.90),
-                                    fontWeight: FontWeight.w700,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Wallet Balance',
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white.withOpacity(0.94),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Icon(Icons.chevron_right_rounded,
-                                  color: Colors.white.withOpacity(0.70)),
-                            ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Live balance overview',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white.withOpacity(0.56),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _Pill(
+                    text: 'Primary',
+                    icon: Icons.star_rounded,
+                    fg: _iceBlue,
+                    bg: _iceBlue.withOpacity(0.12),
+                    border: _iceBlue.withOpacity(0.20),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Balance row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Obx(() {
+                      final code = wc.primaryCurrency.value;
+                      final symbol = _symbolFor(code);
+                      final bal = wc.primaryBalance.value;
+                      final text = _obscured
+                          ? '••••••'
+                          : '$symbol${bal.toStringAsFixed(2)}';
+
+                      return FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          text,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 38,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
                           ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  _IconPillButton(
+                    icon: _obscured
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    onTap: () => setState(() => _obscured = !_obscured),
+                    fg: Colors.white.withOpacity(0.92),
+                    bg: Colors.white.withOpacity(0.06),
+                    border: Colors.white.withOpacity(0.10),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _openCurrencyPicker(
+                  context,
+                  wallets: wallets,
+                  selected: _selectedCode!,
+                  onPick: (code) {
+                    setState(() => _selectedCode = code);
+                    wc.setPrimaryByCode(code);
+                  },
+                ),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white.withOpacity(0.055),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      _MiniCurrencyBadge(
+                        symbol: _symbolFor(selectedWallet.currencyCode),
+                        code: selectedWallet.currencyCode,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Switch currency',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.90),
+                            fontWeight: FontWeight.w800,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-
-                // Optional tiny note (keeps it premium and calm)
-                const SizedBox(height: 10),
-                Text(
-                  'Tap “Change wallet currency” to switch your primary wallet balance.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.55),
-                    fontSize: 12,
-                    height: 1.2,
+                      Icon(Icons.chevron_right_rounded,
+                          color: Colors.white.withOpacity(0.70)),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -446,9 +467,54 @@ class _IconPillButton extends StatelessWidget {
   }
 }
 
+class _MiniCurrencyBadge extends StatelessWidget {
+  final String symbol;
+  final String code;
+
+  const _MiniCurrencyBadge({
+    required this.symbol,
+    required this.code,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final display = symbol.isEmpty ? code.substring(0, 1) : symbol;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withOpacity(0.07),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.account_balance_rounded,
+              color: Colors.white.withOpacity(0.82), size: 16),
+          const SizedBox(width: 7),
+          Text(
+            '$display $code',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.92),
+              fontWeight: FontWeight.w900,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ErrorBox extends StatelessWidget {
   final String text;
-  const _ErrorBox({required this.text});
+  final VoidCallback? onRetry;
+
+  const _ErrorBox({
+    required this.text,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -459,9 +525,54 @@ class _ErrorBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: osvanGreen.withOpacity(0.20)),
       ),
-      child: Text(
-        text,
-        style: TextStyle(color: Colors.white.withOpacity(0.92)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.white.withOpacity(0.92)),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 12),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBox extends StatelessWidget {
+  const _LoadingBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: osvanGreen.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: osvanGreen.withOpacity(0.20)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Loading wallets...',
+            style: TextStyle(color: Colors.white.withOpacity(0.92)),
+          ),
+        ],
       ),
     );
   }

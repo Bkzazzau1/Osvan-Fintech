@@ -5,11 +5,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/config/env.dart';
-import 'package:osvan_app/core/colors.dart';
 import 'package:osvan_app/routes/app_routes.dart'; // ← use named routes
 import 'package:osvan_app/screen/conversion/conversion_view.dart';
 import 'package:osvan_app/screen/crypto/view/crypto_view.dart';
-import 'package:osvan_app/screen/paybills/paybills_view.dart';
 import 'package:osvan_app/screen/wallet/view/add_money_view.dart';
 
 class ActionGrid extends StatelessWidget {
@@ -18,16 +16,14 @@ class ActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_ActionItem>[
-      _ActionItem('Send', Icons.send,
+      _ActionItem('Send', Icons.near_me_rounded, const Color(0xFF10B981),
           () => Get.toNamed(AppRoutes.send)), // ← open flow entry
-      _ActionItem('Crypto', Icons.currency_bitcoin,
+      _ActionItem('Crypto', Icons.currency_bitcoin, const Color(0xFFF59E0B),
           () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl))),
-      _ActionItem(
-          'Add', Icons.attach_money, () => Get.to(() => const AddMoneyView())),
-      _ActionItem('Convert', Icons.compare_arrows,
+      _ActionItem('Add', Icons.add_card_rounded, const Color(0xFF60A5FA),
+          () => Get.to(() => const AddMoneyView())),
+      _ActionItem('Convert', Icons.sync_alt_rounded, const Color(0xFFA78BFA),
           () => Get.to(() => const ConversionView())),
-      _ActionItem('Pay Bills', Icons.receipt_long,
-          () => Get.to(() => const PayBillsView())),
     ];
 
     return LayoutBuilder(
@@ -45,6 +41,7 @@ class ActionGrid extends StatelessWidget {
               .map((i) => _ActionTile(
                     label: i.label,
                     icon: i.icon,
+                    accent: i.accent,
                     onTap: i.onTap,
                     width: tileWidth,
                   ))
@@ -58,19 +55,22 @@ class ActionGrid extends StatelessWidget {
 class _ActionItem {
   final String label;
   final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
-  _ActionItem(this.label, this.icon, this.onTap);
+  _ActionItem(this.label, this.icon, this.accent, this.onTap);
 }
 
 class _ActionTile extends StatelessWidget {
   final String label;
   final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
   final double width;
 
   const _ActionTile({
     required this.label,
     required this.icon,
+    required this.accent,
     required this.onTap,
     required this.width,
   });
@@ -80,9 +80,9 @@ class _ActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final borderColor = isDark ? Colors.transparent : Colors.grey.shade200;
-    final fg = isDark ? osvanGreen : Colors.black87;
-    final cardBg = isDark ? osvanGreen.withOpacity(0.10) : Colors.white;
+    final borderColor =
+        isDark ? accent.withOpacity(0.18) : Colors.grey.shade200;
+    final fg = isDark ? Colors.white.withOpacity(0.94) : Colors.black87;
 
     return Semantics(
       button: true,
@@ -97,9 +97,20 @@ class _ActionTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             child: Container(
               width: width,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              height: 106,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
-                color: cardBg,
+                gradient: isDark
+                    ? LinearGradient(
+                        colors: [
+                          const Color(0xFF101827).withOpacity(0.96),
+                          accent.withOpacity(0.16),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isDark ? null : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: borderColor),
                 boxShadow: isDark
@@ -115,20 +126,24 @@ class _ActionTile extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Icon inside a subtle circle for consistency
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isDark
-                          ? osvanGreen.withOpacity(0.12)
+                          ? accent.withOpacity(0.16)
                           : Colors.black.withOpacity(0.04),
+                      border: Border.all(
+                        color: isDark
+                            ? accent.withOpacity(0.20)
+                            : Colors.transparent,
+                      ),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(icon, size: 26, color: fg),
+                    child: Icon(icon, size: 24, color: isDark ? accent : fg),
                   ),
-                  const SizedBox(height: 10),
+                  const Spacer(),
                   Text(
                     label,
                     textAlign: TextAlign.center,

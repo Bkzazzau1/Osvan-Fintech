@@ -2,8 +2,6 @@
 // Luxury glass send sheet (Option-B rails) + PIN confirm.
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
-import 'dart:ui' as ui;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -304,9 +302,19 @@ class _SendSheetState extends State<SendSheet> {
         children: [
           const Positioned.fill(child: LuxuryBackground()),
           Positioned.fill(
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(color: Colors.black.withOpacity(0.35)),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    kCryptoSurface.withOpacity(0.92),
+                    const Color(0xFF08111F).withOpacity(0.86),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(color: Colors.white.withOpacity(0.07)),
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
           ),
           Obx(() {
@@ -324,13 +332,12 @@ class _SendSheetState extends State<SendSheet> {
                   border: border,
                   enabledBorder: border,
                   focusedBorder: border.copyWith(
-                    borderSide:
-                        const BorderSide(color: osvanGreen, width: 1.2),
+                    borderSide: const BorderSide(color: osvanGreen, width: 1.2),
                   ),
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.06),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 );
 
             return Padding(
@@ -357,7 +364,6 @@ class _SendSheetState extends State<SendSheet> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     Form(
                       key: _formKey,
                       child: Column(
@@ -395,7 +401,7 @@ class _SendSheetState extends State<SendSheet> {
                             valueListenable: _chain,
                             builder: (_, net, __) => TextFormField(
                               controller: _toCtrl,
-                              decoration: dec('Recipient address ()'),
+                              decoration: dec('Recipient address ($net)'),
                               validator: _validateAddress,
                               enabled: !disabled,
                               textInputAction: TextInputAction.next,
@@ -460,7 +466,6 @@ class _SendSheetState extends State<SendSheet> {
       ),
     );
   }
-
 }
 
 class _Handle extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:get/get.dart' hide Response;
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/services/api_error_interceptor.dart';
 import 'package:osvan_app/store/session_store.dart';
 
 /// CoreClient provides:
@@ -75,6 +76,7 @@ class CoreClient {
         logPrint: (obj) => debugPrint(obj.toString()),
       ));
     }
+    dio.interceptors.add(ApiErrorInterceptor(feature: 'core_client'));
 
     final store = SessionStore.instance;
 
@@ -131,8 +133,8 @@ class CoreClient {
     if (code != 401 && code != 403) return false;
     final data = res.data;
     if (data is Map) {
-      final msg =
-          '${data['detail'] ?? data['message'] ?? data['error'] ?? ''}'.toLowerCase();
+      final msg = '${data['detail'] ?? data['message'] ?? data['error'] ?? ''}'
+          .toLowerCase();
       final codeStr = '${data['code'] ?? ''}'.toLowerCase();
       if (msg.contains('token') ||
           msg.contains('credential') ||

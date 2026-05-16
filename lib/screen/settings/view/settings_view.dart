@@ -299,19 +299,14 @@ class _SettingsViewState extends State<SettingsView> {
               return CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                      child: _SettingsHeader(
-                        loading: loading,
-                        onRefresh: () => c.loadMe(silent: false),
-                      ),
-                    ),
-                  ),
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 120),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate.fixed([
+                        if (loading) ...[
+                          const LinearProgressIndicator(minHeight: 2),
+                          const SizedBox(height: 10),
+                        ],
                         if (err.isNotEmpty) ...[
                           _ErrorBanner(
                             text: err,
@@ -323,7 +318,7 @@ class _SettingsViewState extends State<SettingsView> {
                         // Profile header
                         _GlassCard(
                           child: Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(14),
                             child: Row(
                               children: [
                                 Obx(() {
@@ -427,10 +422,7 @@ class _SettingsViewState extends State<SettingsView> {
                         const SizedBox(height: 12),
 
                         // Profile section
-                        _SectionTitle(
-                          title: 'Profile',
-                          subtitle: 'Your contact & address information',
-                        ),
+                        const _SectionTitle(title: 'Profile'),
                         _GlassCard(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
@@ -485,10 +477,7 @@ class _SettingsViewState extends State<SettingsView> {
                         const SizedBox(height: 12),
 
                         // Security section
-                        _SectionTitle(
-                          title: 'Security',
-                          subtitle: 'PIN, password, biometrics & limits',
-                        ),
+                        const _SectionTitle(title: 'Security'),
                         _GlassCard(
                           noPadding: true,
                           child: Column(
@@ -536,10 +525,7 @@ class _SettingsViewState extends State<SettingsView> {
                         const SizedBox(height: 12),
 
                         // Support section
-                        _SectionTitle(
-                          title: 'Support',
-                          subtitle: 'Help & legal',
-                        ),
+                        const _SectionTitle(title: 'Support'),
                         _GlassCard(
                           noPadding: true,
                           child: Column(
@@ -693,101 +679,10 @@ class _SettingsViewState extends State<SettingsView> {
   }
 }
 
-class _SettingsHeader extends StatelessWidget {
-  final bool loading;
-  final VoidCallback onRefresh;
-
-  const _SettingsHeader({required this.loading, required this.onRefresh});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-          decoration: BoxDecoration(
-            color: kDarkSurface.withOpacity(0.78),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kIceBlue.withOpacity(0.14),
-                  border: Border.all(color: kIceBlue.withOpacity(0.18)),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.settings_rounded, color: kIceBlue),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Settings',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Security, profile & preferences',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.65),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (loading)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Tooltip(
-                  message: 'Refresh',
-                  child: InkWell(
-                    onTap: onRefresh,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        color: Colors.white.withOpacity(0.06),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: Icon(Icons.refresh_rounded,
-                          color: Colors.white.withOpacity(0.9)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SectionTitle extends StatelessWidget {
   final String title;
-  final String subtitle;
 
-  const _SectionTitle({required this.title, required this.subtitle});
+  const _SectionTitle({required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -802,15 +697,6 @@ class _SectionTitle extends StatelessWidget {
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 15.5,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.65),
-              fontWeight: FontWeight.w600,
-              fontSize: 12.5,
             ),
           ),
         ],
@@ -868,25 +754,21 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: kDarkSurface.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.35),
-                blurRadius: 22,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: noPadding ? child : child,
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: kDarkSurface.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.22),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
+        child: child,
       ),
     );
   }

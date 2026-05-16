@@ -18,8 +18,6 @@ import 'package:osvan_app/screen/crypto/view/crypto_view.dart';
 // Main shell / dashboard & misc
 import 'package:osvan_app/screen/main_nav/main_nav_view.dart';
 import 'package:osvan_app/screen/notifications/view/notifications_view.dart';
-// Pay Bills
-import 'package:osvan_app/screen/paybills/paybills_view.dart';
 import 'package:osvan_app/screen/security/change_pin_view.dart' as pin_change;
 // ✅ FIX (ONLY what we need now): alias imports for PIN screens (no prefix collision)
 import 'package:osvan_app/screen/security/set_pin_view.dart' as pin_set;
@@ -63,7 +61,6 @@ class AppRoutes {
   static const String addMoney = '/add-money';
   static const String send = '/send';
   static const String crypto = '/crypto';
-  static const String payBills = '/pay-bills';
   static const String conversion = '/conversion';
 
   // Auth
@@ -131,8 +128,6 @@ class AppRoutes {
       page: () => const TransferReceiptView(transferData: {}),
     ),
 
-    GetPage(name: payBills, page: () => const PayBillsView()),
-
     // Wizard inner steps (each guarded by same binding)
     GetPage(
       name: '/send/destination',
@@ -183,15 +178,6 @@ class AppRoutes {
     GetPage(name: changePassword, page: () => const ChangePasswordView()),
     GetPage(name: transactionLimit, page: () => const TransactionLimitView()),
     GetPage(name: closeAccount, page: () => const CloseAccountView()),
-    // Transactions
-    GetPage(
-      name: transactionHistory,
-      page: () => const TransactionHistoryView(),
-    ),
-    GetPage(
-      name: transactionDetail,
-      page: () => const TransactionDetailView(),
-    ),
   ];
 }
 

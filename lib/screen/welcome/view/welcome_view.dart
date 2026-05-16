@@ -25,6 +25,7 @@ class WelcomeView extends StatefulWidget {
 
 class _WelcomeViewState extends State<WelcomeView> {
   int _currentIndex = 0;
+  bool _didPrecache = false;
 
   // ✅ correct controller type
   final CarouselSliderController _carousel = CarouselSliderController();
@@ -55,124 +56,26 @@ class _WelcomeViewState extends State<WelcomeView> {
 
   void onGetStartedPressed() => Get.toNamed(AppRoutes.login);
 
-  void onLanguagePressed() {
-    _showComingSoonSheet(
-      title: "Language",
-      body: "Language selection will be available soon.",
-    );
-  }
-
   void onSkipPressed() => onGetStartedPressed();
 
-  void _showComingSoonSheet({required String title, required String body}) {
-    final th = Theme.of(context);
-    final isDark = th.brightness == Brightness.dark;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didPrecache) return;
+    _didPrecache = true;
 
-    Get.bottomSheet(
-      SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: (isDark ? const Color(0xFF0F172A) : Colors.white)
-                      .withOpacity(isDark ? 0.78 : 0.95),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: (isDark ? Colors.white : Colors.black)
-                        .withOpacity(0.10),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: (isDark ? Colors.white : Colors.black)
-                            .withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: osvanGreen.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.info_outline,
-                              color: osvanGreen.withOpacity(0.95)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: th.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Get.back(),
-                          icon: const Icon(Icons.close_rounded),
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      body,
-                      style: th.textTheme.bodyMedium?.copyWith(
-                        color:
-                            th.textTheme.bodyMedium?.color?.withOpacity(0.75),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Get.back(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: osvanGreen,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          "Okay",
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    )
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-    );
+    for (final slide in slides) {
+      precacheImage(AssetImage(slide.image), context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final th = Theme.of(context);
     final h = MediaQuery.of(context).size.height;
+    final imageCacheWidth = (MediaQuery.of(context).size.width *
+            MediaQuery.of(context).devicePixelRatio)
+        .round();
 
     return Scaffold(
       body: Stack(
@@ -194,7 +97,8 @@ class _WelcomeViewState extends State<WelcomeView> {
                     child: Image.asset(
                       s.image,
                       fit: BoxFit.cover,
-                      filterQuality: FilterQuality.high,
+                      cacheWidth: imageCacheWidth,
+                      filterQuality: FilterQuality.medium,
                     ),
                   ),
                   Container(
@@ -271,17 +175,11 @@ class _WelcomeViewState extends State<WelcomeView> {
                   setState(() => _currentIndex = index),
             ),
           ),
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
                 children: [
-                  _GlassPillButton(
-                    icon: Icons.language_rounded,
-                    label: "Language",
-                    onTap: onLanguagePressed,
-                  ),
                   const Spacer(),
                   _GlassTextButton(
                     label: "Skip",
@@ -291,7 +189,6 @@ class _WelcomeViewState extends State<WelcomeView> {
               ),
             ),
           ),
-
           Positioned(
             left: 16,
             right: 16,
@@ -461,52 +358,6 @@ class _BottomGlassCTA extends StatelessWidget {
                 ),
               )
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassPillButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _GlassPillButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Material(
-          color: Colors.white.withOpacity(0.10),
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
       ),

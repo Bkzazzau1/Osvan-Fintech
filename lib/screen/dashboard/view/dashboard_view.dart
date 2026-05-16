@@ -1,12 +1,13 @@
 // ignore_for_file: deprecated_member_use
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/core/colors.dart';
 import 'package:osvan_app/screen/dashboard/widgets/action_grid.dart';
+import 'package:osvan_app/screen/dashboard/widgets/financial_pulse_strip.dart';
 import 'package:osvan_app/screen/dashboard/widgets/services_and_activity.dart';
+import 'package:osvan_app/screen/dashboard/widgets/smart_insight_card.dart';
+import 'package:osvan_app/screen/dashboard/widgets/trust_signal_strip.dart';
 import 'package:osvan_app/screen/dashboard/widgets/wallet_balance_section.dart';
 import 'package:osvan_app/screen/wallet/controllers/wallets_controller.dart';
 import 'package:osvan_app/screen/wallet/services/config_service.dart';
@@ -59,7 +60,7 @@ class _DashboardViewState extends State<DashboardView> {
   Widget build(BuildContext context) {
     final cfg = Get.find<ConfigService>();
     final bottomSafe = MediaQuery.of(context).padding.bottom;
-    final scrollBottomPadding = kBottomNavigationBarHeight + 40 + bottomSafe;
+    final scrollBottomPadding = kBottomNavigationBarHeight + 44 + bottomSafe;
 
     // actionable notices only
     final canFund = cfg.cardsFundEnabled;
@@ -102,23 +103,20 @@ class _DashboardViewState extends State<DashboardView> {
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
+                  const SliverToBoxAdapter(child: SizedBox(height: 0)),
                   SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                        16, 0, 16, scrollBottomPadding),
+                    padding:
+                        EdgeInsets.fromLTRB(14, 0, 14, scrollBottomPadding),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate.fixed([
-                        // Header (small, classy)
-                        const _DashboardHeader(),
-                        const SizedBox(height: 14),
+                        const WalletBalanceSection(),
 
-                        // Wallets
-                        const SectionCard(
-                          title: 'Wallets',
-                          subtitle: 'Balances & quick overview',
-                          child: WalletBalanceSection(),
-                        ),
+                        const SizedBox(height: 12),
+                        const FinancialPulseStrip(),
+                        const SizedBox(height: 12),
+                        const SmartInsightCard(),
+                        const SizedBox(height: 12),
+                        const TrustSignalStrip(),
 
                         if (notices.isNotEmpty) const SizedBox(height: 12),
                         if (notices.isNotEmpty)
@@ -134,23 +132,18 @@ class _DashboardViewState extends State<DashboardView> {
                             ),
                           ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
 
                         // Quick actions
                         const SectionCard(
                           title: 'Quick actions',
-                          subtitle: 'Send, receive, pay bills & more',
+                          subtitle: 'Transfers, crypto, funding & conversion',
                           child: ActionGrid(),
                         ),
 
                         const SizedBox(height: 14),
 
-                        // Services & Activity
-                        const SectionCard(
-                          title: 'Services & activity',
-                          subtitle: 'Cards, transactions, utilities',
-                          child: ServicesAndActivity(),
-                        ),
+                        const ServicesAndActivity(),
 
                         const SizedBox(height: 28),
                       ]),
@@ -162,59 +155,6 @@ class _DashboardViewState extends State<DashboardView> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Small “brand pill”
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: const Color(0xFF0F172A), // rule: big card color
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: osvanGreen,
-                  boxShadow: [
-                    BoxShadow(
-                      color: osvanGreen.withOpacity(0.35),
-                      blurRadius: 12,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Osvan',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.notifications_none_rounded),
-        ),
-      ],
     );
   }
 }
@@ -240,15 +180,15 @@ class _LuxuryBackground extends StatelessWidget {
         children: [
           // glow blobs
           Positioned(
-            top: -120,
-            left: -80,
-            child: _GlowBlob(color: osvanGreen, size: 260, opacity: 0.12),
+            top: -150,
+            left: -120,
+            child: _GlowBlob(color: osvanGreen, size: 320, opacity: 0.12),
           ),
           Positioned(
-            top: 140,
-            right: -120,
-            child:
-                _GlowBlob(color: Colors.blueAccent, size: 260, opacity: 0.10),
+            top: 210,
+            right: -130,
+            child: _GlowBlob(
+                color: const Color(0xFF60A5FA), size: 300, opacity: 0.12),
           ),
           Positioned(
             bottom: -140,
@@ -276,14 +216,19 @@ class _GlowBlob extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            width: size,
-            height: size,
-            color: color.withOpacity(opacity),
-          ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withOpacity(opacity),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(opacity),
+              blurRadius: 80,
+              spreadRadius: 24,
+            ),
+          ],
         ),
       ),
     );
@@ -315,8 +260,9 @@ class SectionCard extends StatelessWidget {
           Text(
             title ?? '',
             style: t.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               letterSpacing: 0.1,
+              fontSize: 18,
             ),
           ),
           if (subtitle != null) ...[
@@ -324,39 +270,34 @@ class SectionCard extends StatelessWidget {
             Text(
               subtitle!,
               style: t.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withOpacity(0.70),
+                color: Colors.white.withOpacity(0.62),
                 height: 1.2,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
         ],
-
-        // Premium glass card
-        ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A).withOpacity(0.92), // rule
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.35),
-                    blurRadius: 22,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: noPadding
-                  ? child
-                  : Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: child,
-                    ),
+        RepaintBoundary(
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A).withOpacity(0.90),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.07)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.22),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
+            child: noPadding
+                ? child
+                : Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: child,
+                  ),
           ),
         ),
       ],

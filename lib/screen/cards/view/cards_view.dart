@@ -16,7 +16,6 @@ import 'package:osvan_app/widgets/luxury_background.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'widgets/card_tile.dart';
-import 'widgets/section_card.dart';
 import 'widgets/transactions_sheet.dart';
 
 // ───────────────────── Local ViewModel ─────────────────────
@@ -96,6 +95,42 @@ class CardVM {
       currency: currency,
       status: status,
       balanceMinor: cents,
+    );
+  }
+}
+
+class _InlineSectionHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _InlineSectionHeader({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.62),
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1403,19 +1438,34 @@ class _CardsViewState extends State<CardsView> {
 
   Widget _emptyState(BuildContext context) {
     final th = Theme.of(context);
-    final isDark = th.brightness == Brightness.dark;
 
     return Column(
       children: [
         _header(context),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         _kycBannerPremium(),
-        const SizedBox(height: 14),
-        Card(
-          elevation: 10,
-          shadowColor: Colors.black.withOpacity(0.08),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                _surface.withOpacity(0.96),
+                const Color(0xFF172554).withOpacity(0.64),
+                const Color(0xFF08111F).withOpacity(0.96),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.22),
+                blurRadius: 16,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -1445,8 +1495,7 @@ class _CardsViewState extends State<CardsView> {
                       : "Complete Card KYC to unlock card requests.",
                   textAlign: TextAlign.center,
                   style: th.textTheme.bodyMedium?.copyWith(
-                    color: (isDark ? Colors.white : Colors.black)
-                        .withOpacity(0.70),
+                    color: Colors.white.withOpacity(0.70),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1500,7 +1549,7 @@ class _CardsViewState extends State<CardsView> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
-    final scrollBottomPadding = kBottomNavigationBarHeight + 24 + bottomSafe;
+    final scrollBottomPadding = kBottomNavigationBarHeight + 44 + bottomSafe;
 
     final dark = ThemeData(
       brightness: Brightness.dark,
@@ -1520,22 +1569,6 @@ class _CardsViewState extends State<CardsView> {
             const LuxuryBackground(),
             Scaffold(
               backgroundColor: Colors.transparent,
-              appBar: AppBar(
-                toolbarHeight: 52,
-                title: Text(
-                  'Cards',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.1,
-                      ),
-                ),
-                centerTitle: true,
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                systemOverlayStyle: SystemUiOverlayStyle.light,
-              ),
               body: RefreshIndicator(
                 onRefresh: _refresh,
                 child: Obx(() {
@@ -1543,9 +1576,9 @@ class _CardsViewState extends State<CardsView> {
                     return ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding:
-                          EdgeInsets.fromLTRB(16, 16, 16, scrollBottomPadding),
+                          EdgeInsets.fromLTRB(14, 0, 14, scrollBottomPadding),
                       children: const [
-                        SizedBox(height: 140),
+                        SizedBox(height: 90),
                         Center(child: CircularProgressIndicator()),
                         SizedBox(height: 600),
                       ],
@@ -1556,7 +1589,7 @@ class _CardsViewState extends State<CardsView> {
                     return ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding:
-                          EdgeInsets.fromLTRB(16, 16, 16, scrollBottomPadding),
+                          EdgeInsets.fromLTRB(14, 0, 14, scrollBottomPadding),
                       children: [
                         _emptyState(context),
                       ],
@@ -1565,70 +1598,85 @@ class _CardsViewState extends State<CardsView> {
 
                   return ListView(
                     padding:
-                        EdgeInsets.fromLTRB(16, 16, 16, scrollBottomPadding),
+                        EdgeInsets.fromLTRB(14, 0, 14, scrollBottomPadding),
                     children: [
                       _header(context),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       _kycBannerPremium(),
                       const SizedBox(height: 14),
-
-                      SectionCard(
+                      _InlineSectionHeader(
                         title: 'Your cards',
                         subtitle:
                             'Tap a card to open transactions, statement, or actions',
-                        child: Column(
-                          children: List.generate(
-                            _cards.length,
-                            (i) => Padding(
-                              padding: EdgeInsets.only(
-                                  bottom: i == _cards.length - 1 ? 0 : 12),
-                              child: CardTile(
-                                card: _cards[i],
-                                freezeBusy: _freezeBusy[_cards[i].id] == true,
-                                termBusy: _terminateBusy[_cards[i].id] == true,
-                                onOpenActions: (c) => CardTile.openActions(
-                                  context,
-                                  card: c,
-                                  freezeBusy: _freezeBusy[c.id] == true,
-                                  termBusy: _terminateBusy[c.id] == true,
-                                  onViewTx: () => _openTransactions(c),
-                                  onReveal: () => _revealCard(c),
-                                  onStatement: () => _openStatement(c),
-                                  onTopUp: () => _topUp(c),
-                                  onWithdraw: () => _withdraw(c),
-                                  onToggleFreeze: () => _toggleFreeze(c),
-                                  onTerminate: () => _confirmTerminate(c),
-                                ),
-                              ),
+                      ),
+                      const SizedBox(height: 10),
+                      ...List.generate(
+                        _cards.length,
+                        (i) => Padding(
+                          padding: EdgeInsets.only(
+                              bottom: i == _cards.length - 1 ? 0 : 10),
+                          child: CardTile(
+                            card: _cards[i],
+                            freezeBusy: _freezeBusy[_cards[i].id] == true,
+                            termBusy: _terminateBusy[_cards[i].id] == true,
+                            onOpenActions: (c) => CardTile.openActions(
+                              context,
+                              card: c,
+                              freezeBusy: _freezeBusy[c.id] == true,
+                              termBusy: _terminateBusy[c.id] == true,
+                              onViewTx: () => _openTransactions(c),
+                              onReveal: () => _revealCard(c),
+                              onStatement: () => _openStatement(c),
+                              onTopUp: () => _topUp(c),
+                              onWithdraw: () => _withdraw(c),
+                              onToggleFreeze: () => _toggleFreeze(c),
+                              onTerminate: () => _confirmTerminate(c),
                             ),
                           ),
                         ),
                       ),
                       if (_cards.length < _maxCards) ...[
-                        const SizedBox(height: 14),
-                        SectionCard(
-                          title: 'Create another card',
-                          subtitle:
-                              'You can have up to $_maxCards virtual cards.',
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _goCreateCard,
-                              icon: const Icon(Icons.add_rounded),
-                              label: const Text('Request Card'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: osvanGreen,
-                                foregroundColor: Colors.black,
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _surface.withOpacity(0.86),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.08)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'You can have up to $_maxCards virtual cards.',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.72),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              ElevatedButton.icon(
+                                onPressed: _goCreateCard,
+                                icon: const Icon(Icons.add_rounded),
+                                label: const Text('Request'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: osvanGreen,
+                                  foregroundColor: Colors.black,
+                                  textStyle: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

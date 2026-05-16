@@ -41,7 +41,7 @@ class ConversionView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
       appBar: AppBar(
-        title: const Text('Currency Conversion'),
+        title: const Text('Convert Currency'),
         elevation: 0,
         centerTitle: true,
         backgroundColor: Colors.transparent,
@@ -51,229 +51,218 @@ class ConversionView extends StatelessWidget {
         children: [
           const _LuxuryBackground(),
           Obx(() {
-              final needsNet = c.needsNetwork;
+            final needsNet = c.needsNetwork;
 
-              final amountOk = c.amount.value.trim().isNotEmpty;
-              final networkOk = !needsNet || c.network.value.trim().isNotEmpty;
+            final amountOk = c.amount.value.trim().isNotEmpty;
+            final networkOk = !needsNet || c.network.value.trim().isNotEmpty;
 
-              final canQuote = !c.loading.value && amountOk && networkOk;
-              final canConfirm = canQuote && (c.lastQuote.value != null);
+            final canQuote = !c.loading.value && amountOk && networkOk;
+            final canConfirm = canQuote && (c.lastQuote.value != null);
 
-              return SafeArea(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _HeroHeader(
-                      title: "Convert instantly",
-                      subtitle:
-                          "Swap between fiat and stablecoin with transparent rates.",
-                      pill: "OPTION B",
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: 14),
-                    _GlassCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // FROM
+            return SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
+                children: [
+                  _HeroHeader(
+                    title: "Convert instantly",
+                    subtitle:
+                        "Swap between fiat and stablecoin with transparent rates.",
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 12),
+                  _GlassCard(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // FROM
+                          _SectionTitle(
+                            icon: Icons.call_made_rounded,
+                            title: "From",
+                            subtitle: "Choose source currency",
+                          ),
+                          const SizedBox(height: 10),
+                          _dropdown(
+                            context,
+                            label: "From Currency",
+                            value: c.from.value,
+                            items: const ["USD", "NGN", "USDT"],
+                            onChanged: (v) {
+                              final nv = (v ?? c.from.value);
+                              c.from.value = nv;
+                              // Clear network when coin isn't USDT to prevent stale value
+                              if (nv.toUpperCase() != 'USDT') {
+                                c.network.value = '';
+                              }
+                            },
+                            trailingHint: _balanceHint(
+                              context: context,
+                              wc: wc,
+                              cc: cc,
+                              coin: c.from.value,
+                              network: c.network.value,
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // TO
+                          _SectionTitle(
+                            icon: Icons.call_received_rounded,
+                            title: "To",
+                            subtitle: "Choose destination currency",
+                          ),
+                          const SizedBox(height: 10),
+                          _dropdown(
+                            context,
+                            label: "To Currency",
+                            value: c.to.value,
+                            items: const ["USD", "NGN", "USDT"],
+                            onChanged: (v) {
+                              final nv = (v ?? c.to.value);
+                              c.to.value = nv;
+                              if (nv.toUpperCase() != 'USDT') {
+                                c.network.value = '';
+                              }
+                            },
+                            trailingHint: _balanceHint(
+                              context: context,
+                              wc: wc,
+                              cc: cc,
+                              coin: c.to.value,
+                              network: c.network.value,
+                            ),
+                          ),
+
+                          // NETWORK (only when USDT involved)
+                          if (needsNet) ...[
+                            const SizedBox(height: 14),
                             _SectionTitle(
-                              icon: Icons.call_made_rounded,
-                              title: "From",
-                              subtitle: "Choose source currency",
+                              icon: Icons.hub_outlined,
+                              title: "Network",
+                              subtitle: "Select chain for stablecoin",
                             ),
                             const SizedBox(height: 10),
                             _dropdown(
                               context,
-                              label: "From Currency",
-                              value: c.from.value,
-                              items: const ["USD", "NGN", "USDT"],
-                              onChanged: (v) {
-                                final nv = (v ?? c.from.value);
-                                c.from.value = nv;
-                                // Clear network when coin isn't USDT to prevent stale value
-                                if (nv.toUpperCase() != 'USDT') {
-                                  c.network.value = '';
-                                }
-                              },
-                              trailingHint: _balanceHint(
+                              label: "Network",
+                              value: c.network.value.trim().isEmpty
+                                  ? null
+                                  : c.network.value,
+                              items: const ["TRON", "BSC", "ETH"],
+                              onChanged: (v) => c.network.value = v ?? '',
+                              trailingHint: _usdtBalanceByNetworkHint(
                                 context: context,
-                                wc: wc,
                                 cc: cc,
-                                coin: c.from.value,
                                 network: c.network.value,
                               ),
                             ),
-
-                            const SizedBox(height: 14),
-
-                            // TO
-                            _SectionTitle(
-                              icon: Icons.call_received_rounded,
-                              title: "To",
-                              subtitle: "Choose destination currency",
-                            ),
-                            const SizedBox(height: 10),
-                            _dropdown(
-                              context,
-                              label: "To Currency",
-                              value: c.to.value,
-                              items: const ["USD", "NGN", "USDT"],
-                              onChanged: (v) {
-                                final nv = (v ?? c.to.value);
-                                c.to.value = nv;
-                                if (nv.toUpperCase() != 'USDT') {
-                                  c.network.value = '';
-                                }
-                              },
-                              trailingHint: _balanceHint(
-                                context: context,
-                                wc: wc,
-                                cc: cc,
-                                coin: c.to.value,
-                                network: c.network.value,
-                              ),
-                            ),
-
-                            // NETWORK (only when USDT involved)
-                            if (needsNet) ...[
-                              const SizedBox(height: 14),
-                              _SectionTitle(
-                                icon: Icons.hub_outlined,
-                                title: "Network",
-                                subtitle: "Select chain for stablecoin",
-                              ),
-                              const SizedBox(height: 10),
-                              _dropdown(
-                                context,
-                                label: "Network",
-                                value: c.network.value.trim().isEmpty
-                                    ? null
-                                    : c.network.value,
-                                // Keep all supported; you can trim to ['TRON','BSC'] if desired
-                                items: const ["TRON", "BSC", "ETH"],
-                                onChanged: (v) => c.network.value = v ?? '',
-                                trailingHint: _usdtBalanceByNetworkHint(
-                                  context: context,
-                                  cc: cc,
-                                  network: c.network.value,
+                            if (!networkOk)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _InlineWarn(
+                                  text: 'Select a network for USDT',
                                 ),
                               ),
-                              if (!networkOk)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: _InlineWarn(
-                                    text: 'Select a network for USDT',
-                                  ),
-                                ),
-                            ],
-
-                            const SizedBox(height: 14),
-
-                            // AMOUNT
-                            _SectionTitle(
-                              icon: Icons.numbers_outlined,
-                              title: "Amount",
-                              subtitle: "Enter how much you want to convert",
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              enabled: !c.loading.value,
-                              decoration: _dec(
-                                context,
-                                label: "Amount",
-                                icon: Icons.numbers_outlined,
-                                hint: "0.00",
-                                suffix: const Icon(Icons.edit_outlined),
-                              ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                  RegExp(r'^\d*\.?\d{0,8}$'),
-                                ),
-                              ],
-                              onChanged: (v) => c.amount.value = v,
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Actions row
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _PrimaryButton(
-                                    text: c.loading.value
-                                        ? "Generating…"
-                                        : "Get Quote",
-                                    loading: c.loading.value,
-                                    onPressed: canQuote ? c.getQuote : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                _IconAction(
-                                  tooltip: "Swap currencies",
-                                  icon: Icons.swap_vert_rounded,
-                                  onTap: c.loading.value
-                                      ? null
-                                      : () {
-                                          final tmp = c.from.value;
-                                          c.from.value = c.to.value;
-                                          c.to.value = tmp;
-
-                                          // Network rules
-                                          final involvesUsdt =
-                                              c.from.value.toUpperCase() ==
-                                                      'USDT' ||
-                                                  c.to.value.toUpperCase() ==
-                                                      'USDT';
-                                          if (!involvesUsdt) {
-                                            c.network.value = '';
-                                          }
-                                        },
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            if (c.lastQuote.value != null) const _QuoteCard(),
-
-                            if (c.lastQuote.value != null) ...[
-                              const SizedBox(height: 6),
-                              _PrimaryButton(
-                                text: "Confirm Conversion",
-                                loading: false,
-                                onPressed: canConfirm ? c.confirm : null,
-                              ),
-                            ],
-
-                            if (c.lastConfirm.value != null) ...[
-                              const SizedBox(height: 10),
-                              const _ConfirmCard(),
-                            ],
-
-                            if (c.error.value != null) ...[
-                              const SizedBox(height: 10),
-                              _InlineError(text: c.error.value!),
-                            ],
                           ],
-                        ),
+
+                          const SizedBox(height: 14),
+
+                          // AMOUNT
+                          _SectionTitle(
+                            icon: Icons.numbers_outlined,
+                            title: "Amount",
+                            subtitle: "Enter how much you want to convert",
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            enabled: !c.loading.value,
+                            decoration: _dec(
+                              context,
+                              label: "Amount",
+                              icon: Icons.numbers_outlined,
+                              hint: "0.00",
+                              suffix: const Icon(Icons.edit_outlined),
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,8}$'),
+                              ),
+                            ],
+                            onChanged: (v) => c.amount.value = v,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Actions row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _PrimaryButton(
+                                  text: c.loading.value
+                                      ? "Generating..."
+                                      : "Get Quote",
+                                  loading: c.loading.value,
+                                  onPressed: canQuote ? c.getQuote : null,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              _IconAction(
+                                tooltip: "Swap currencies",
+                                icon: Icons.swap_vert_rounded,
+                                onTap: c.loading.value
+                                    ? null
+                                    : () {
+                                        final tmp = c.from.value;
+                                        c.from.value = c.to.value;
+                                        c.to.value = tmp;
+
+                                        final involvesUsdt = c.from.value
+                                                    .toUpperCase() ==
+                                                'USDT' ||
+                                            c.to.value.toUpperCase() == 'USDT';
+                                        if (!involvesUsdt) {
+                                          c.network.value = '';
+                                        }
+                                      },
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          if (c.lastQuote.value != null) const _QuoteCard(),
+
+                          if (c.lastQuote.value != null) ...[
+                            const SizedBox(height: 6),
+                            _PrimaryButton(
+                              text: "Confirm Conversion",
+                              loading: false,
+                              onPressed: canConfirm ? c.confirm : null,
+                            ),
+                          ],
+
+                          if (c.lastConfirm.value != null) ...[
+                            const SizedBox(height: 10),
+                            const _ConfirmCard(),
+                          ],
+
+                          if (c.error.value != null) ...[
+                            const SizedBox(height: 10),
+                            _InlineError(text: c.error.value!),
+                          ],
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    _FootNote(
-                      text:
-                          "Tip: Always confirm you selected the correct network when converting stablecoins.",
-                      isDark: isDark,
-                    ),
-                  ],
-                ),
-              );
-            }),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -418,13 +407,11 @@ class ConversionView extends StatelessWidget {
 class _HeroHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-  final String pill;
   final bool isDark;
 
   const _HeroHeader({
     required this.title,
     required this.subtitle,
-    required this.pill,
     required this.isDark,
   });
 
@@ -456,38 +443,7 @@ class _HeroHeader extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 10),
-        _Pill(text: pill),
       ],
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  final String text;
-  const _Pill({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF60A5FA).withOpacity(isDark ? 0.14 : 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xFF60A5FA).withOpacity(isDark ? 0.28 : 0.22),
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isDark ? Colors.white : Colors.black,
-          fontWeight: FontWeight.w900,
-          fontSize: 11,
-          letterSpacing: 0.4,
-        ),
-      ),
     );
   }
 }
@@ -498,28 +454,31 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A).withOpacity(0.92),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.06),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.35),
-                blurRadius: 22,
-                offset: const Offset(0, 14),
-              ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF0F172A).withOpacity(0.96),
+              const Color(0xFF111C33).withOpacity(0.96),
+              const Color(0xFF08111F).withOpacity(0.98),
             ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          child: child,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.07),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.24),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
+        child: child,
       ),
     );
   }
@@ -726,44 +685,6 @@ class _InlineError extends StatelessWidget {
   }
 }
 
-class _FootNote extends StatelessWidget {
-  final String text;
-  final bool isDark;
-
-  const _FootNote({required this.text, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.shield_outlined,
-              size: 18, color: osvanGreen.withOpacity(0.95)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: (isDark ? Colors.white : Colors.black).withOpacity(0.72),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _GlowBlob extends StatelessWidget {
   final Color color;
   final double size;
@@ -897,8 +818,7 @@ class _QuoteCard extends GetView<ConversionController> {
                 const SizedBox(height: 10),
                 _kv(context, "You receive", "${q.youReceive} ${q.to}"),
                 _kv(context, "Rate", q.rate, muted: true),
-                _kv(context, "Fee", "${q.fee} (${q.feePercent}%)",
-                    muted: true),
+                _kv(context, "Fee", "${q.fee} (${q.feePercent}%)", muted: true),
                 if (q.netSourceAmount.isNotEmpty)
                   _kv(context, "Net debit", "${q.netSourceAmount} ${q.from}",
                       muted: true),

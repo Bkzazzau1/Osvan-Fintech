@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:get/get.dart';
@@ -93,8 +94,25 @@ class ConfigService extends GetxService {
   static Future<ConfigService> init() async {
     await GetStorage.init(_boxName);
     final svc = Get.put(ConfigService(), permanent: true);
-    await svc.load(); // load from cache / network
+    await svc.loadCachedOrFallback();
+    unawaited(svc.refreshNow());
     return svc;
+  }
+
+  Future<void> loadCachedOrFallback() async {
+    try {
+      final cached = _box.read<String>(_cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        _apply(jsonDecode(cached) as Map<String, dynamic>, source: 'cache');
+        return;
+      }
+    } catch (_) {
+      // ignore cache parse errors
+    }
+
+    if (_data.isEmpty) {
+      _apply(_fallback(), source: 'fallback');
+    }
   }
 
   /// Load from cache (if fresh) then refresh from network in the background.

@@ -96,9 +96,11 @@ class AuthController extends GetxController {
 
       await SessionStore.instance.saveTokens(access: access, refresh: refresh);
 
-      // Kick off wallet refresh loop (immediate + 1s + every 60s)
+      // Kick off heavier post-login work after navigation starts.
       try {
-        unawaited(Get.find<WalletsController>().startAutoRefresh());
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 300), () {
+          return Get.find<WalletsController>().startAutoRefresh();
+        }));
       } catch (_) {}
 
       // Start session timeout timers (idle + hard)
@@ -108,7 +110,9 @@ class AuthController extends GetxController {
 
       // Register device for push notifications (best-effort)
       try {
-        unawaited(NotificationService.instance.initAndRegister());
+        unawaited(Future<void>.delayed(const Duration(seconds: 2), () {
+          return NotificationService.instance.initAndRegister();
+        }));
       } catch (_) {}
 
       Get.offAllNamed('/main');

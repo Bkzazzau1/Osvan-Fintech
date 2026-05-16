@@ -1,4 +1,6 @@
 // lib/controllers/dashboard_controller.dart
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:osvan_app/models/user_me.dart';
 import 'package:osvan_app/services/api_client.dart';
@@ -13,6 +15,8 @@ class DashboardController extends GetxController {
 
   // ---- Selected tab/index state (existing) ----
   var selectedIndex = 0.obs;
+  bool _loadedUser = false;
+  bool _loadingUser = false;
 
   @override
   void onInit() {
@@ -24,10 +28,23 @@ class DashboardController extends GetxController {
   /// Load profile once after login and cache in memory.
   /// Also ensures Brails customer exists (idempotent) based on the profile.
   Future<void> loadUser() async {
-    final me = await ApiClient.shared.getMe(); // raw Map from /api/user/me
-    user.value = UserMe.fromMap(me); // keep your model
+    if (_loadedUser || _loadingUser) return;
+    _loadingUser = true;
 
-    // ✅ Ensure Brails customer exists using the same profile map
+    try {
+      final api = await ApiClient.ensureInitialized();
+      final me = await api.getMe(); // raw Map from /api/user/me
+      user.value = UserMe.fromMap(me); // keep your model
+      _loadedUser = true;
+
+      // ✅ Ensure Brails customer exists using the same profile map
+      unawaited(_ensureCustomer(me));
+    } finally {
+      _loadingUser = false;
+    }
+  }
+
+  Future<void> _ensureCustomer(Map<String, dynamic> me) async {
     try {
       await CustomersService.ensureFromMe(me);
     } catch (_) {

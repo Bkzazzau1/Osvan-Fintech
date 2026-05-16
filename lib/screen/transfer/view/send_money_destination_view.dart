@@ -49,6 +49,47 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
     return double.tryParse(cleaned) ?? 0.0;
   }
 
+  List<Map<String, String>> _filteredCountries(
+    Iterable<Map<String, String>> items,
+  ) {
+    final query = _countrySearchCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return items.toList();
+
+    return items.where((c) {
+      final name = (c['name'] ?? '').toString().toLowerCase();
+      final code = (c['code'] ?? '').toString().toLowerCase();
+      return name.contains(query) || code.contains(query);
+    }).toList();
+  }
+
+  bool _selectedCountryMatchesSearch() {
+    final query = _countrySearchCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return true;
+
+    final selected = ctrl.countries.firstWhereOrNull(
+      (c) =>
+          (c['code'] ?? '').toString().toUpperCase() ==
+          ctrl.countryCode.value.toUpperCase(),
+    );
+    if (selected == null) return false;
+
+    final name = (selected['name'] ?? '').toString().toLowerCase();
+    final code = (selected['code'] ?? '').toString().toLowerCase();
+    return name.contains(query) || code.contains(query);
+  }
+
+  Future<void> _selectFirstFilteredCountry() async {
+    final filtered = _filteredCountries(ctrl.countries);
+    if (filtered.isEmpty) return;
+
+    final code = (filtered.first['code'] ?? '').toString().trim();
+    if (code.isEmpty) return;
+
+    FocusScope.of(context).unfocus();
+    await ctrl.onSelectCountry(code);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -136,25 +177,15 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
                               controller: _countrySearchCtrl,
                               label: 'Search country',
                               icon: Icons.search,
+                              textInputAction: TextInputAction.search,
+                              onChanged: (_) => setState(() {}),
+                              onSubmitted: (_) => _selectFirstFilteredCountry(),
                             ),
                             const SizedBox(height: 12),
 
                             // Country dropdown
                             Obx(() {
-                              final query =
-                                  _countrySearchCtrl.text.toLowerCase();
-                              final filtered = query.isEmpty
-                                  ? items
-                                  : items.where((c) {
-                                      final name = (c['name'] ?? '')
-                                          .toString()
-                                          .toLowerCase();
-                                      final code = (c['code'] ?? '')
-                                          .toString()
-                                          .toLowerCase();
-                                      return name.contains(query) ||
-                                          code.contains(query);
-                                    }).toList();
+                              final filtered = _filteredCountries(items);
 
                               final countryItems = filtered
                                   .map((c) => DropdownMenuItem<String>(
@@ -172,21 +203,21 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
                                       countryItems.any((it) =>
                                           it.value == ctrl.countryCode.value);
 
-                              final current = hasCurrent
-                                  ? ctrl.countryCode.value
-                                  : (countryItems.isNotEmpty
-                                      ? countryItems.first.value
-                                      : null);
-
                               return _DarkDropdown<String>(
                                 label: 'Country',
-                                value: current,
+                                value:
+                                    hasCurrent ? ctrl.countryCode.value : null,
+                                hint: filtered.isEmpty
+                                    ? 'No matching country'
+                                    : 'Select country',
                                 items: countryItems,
                                 onChanged: loading
                                     ? null
                                     : (v) async {
                                         if (v == null) return;
+                                        FocusScope.of(context).unfocus();
                                         await ctrl.onSelectCountry(v);
+                                        if (mounted) setState(() {});
                                       },
                               );
                             }),
@@ -250,6 +281,7 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
                       final loading = ctrl.isLoading.value;
                       final canContinue = !loading &&
                           ctrl.countryCode.value.isNotEmpty &&
+                          _selectedCountryMatchesSearch() &&
                           ctrl.amountMajor.value > 0;
 
                       return SizedBox(
@@ -257,6 +289,7 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
                         child: ElevatedButton.icon(
                           onPressed: canContinue
                               ? () {
+                                  FocusScope.of(context).unfocus();
                                   ctrl.step.value = 2;
                                   Get.to(() => const SendMoneyDetailsView());
                                 }
@@ -264,7 +297,7 @@ class _SendMoneyDestinationViewState extends State<SendMoneyDestinationView> {
                                   if (loading) return;
                                   Get.snackbar(
                                     'Missing info',
-                                    'Pick a country and enter an amount',
+                                    'Select the country from the list and enter an amount',
                                     snackPosition: SnackPosition.BOTTOM,
                                     backgroundColor: Colors.red,
                                     colorText: Colors.white,
@@ -366,17 +399,26 @@ class _DarkTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final IconData icon;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
 
   const _DarkTextField({
     required this.controller,
     required this.label,
     required this.icon,
+    this.onChanged,
+    this.onSubmitted,
+    this.textInputAction,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      textInputAction: textInputAction,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
       decoration: _darkInputDecoration(label: label, hint: null, icon: icon),
     );
@@ -386,6 +428,7 @@ class _DarkTextField extends StatelessWidget {
 class _DarkDropdown<T> extends StatelessWidget {
   final String label;
   final T? value;
+  final String? hint;
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?>? onChanged;
 
@@ -394,6 +437,7 @@ class _DarkDropdown<T> extends StatelessWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    this.hint,
   });
 
   @override
@@ -401,6 +445,16 @@ class _DarkDropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       isExpanded: true,
       initialValue: value,
+      hint: hint == null
+          ? null
+          : Text(
+              hint!,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.58),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
       items: items,
       onChanged: onChanged,
       dropdownColor: kDarkSurface,

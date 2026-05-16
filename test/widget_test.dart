@@ -1,31 +1,69 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
+import 'package:osvan_app/controller/theme_controller.dart';
 import 'package:osvan_app/main.dart';
+import 'package:osvan_app/routes/app_routes.dart';
+import 'package:osvan_app/screen/dashboard/widgets/wallet_balance_section.dart';
+import 'package:osvan_app/screen/wallet/controllers/wallets_controller.dart';
+import 'package:osvan_app/screen/wallet/models/wallet.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp(
-      initialRoute: '',
-    ));
+  tearDown(Get.reset);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('app boots to welcome screen', (WidgetTester tester) async {
+    Get.put<ThemeController>(ThemeController());
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpWidget(const MyApp(initialRoute: AppRoutes.welcome));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Send & receive\nwith confidence'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
   });
+
+  testWidgets('wallet card renders a loaded primary balance', (tester) async {
+    Get.put<WalletsController>(_TestWalletsController(), permanent: true);
+    final wc = Get.find<WalletsController>();
+    wc.wallets.assignAll(const [
+      Wallet(id: 1, currencyCode: 'NGN', balance: 1250),
+      Wallet(id: 2, currencyCode: 'USD', balance: 10),
+    ]);
+    wc.primaryCurrency.value = 'NGN';
+    wc.primaryBalance.value = 1250;
+    wc.primaryBalanceText.value = '1250.00';
+
+    await tester.pumpWidget(
+      const GetMaterialApp(
+        home: Scaffold(body: WalletBalanceSection()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Wallet Balance'), findsOneWidget);
+    expect(find.text('₦1250.00'), findsOneWidget);
+    expect(find.textContaining('not found', findRichText: true), findsNothing);
+  });
+
+  test('review-facing route table excludes unfinished pay bills route', () {
+    final names = AppRoutes.pages.map((page) => page.name).toSet();
+
+    expect(names, contains(AppRoutes.send));
+    expect(names, contains(AppRoutes.createCard));
+    expect(names, isNot(contains('/pay-bills')));
+  });
+}
+
+class _TestWalletsController extends WalletsController {
+  @override
+  // ignore: must_call_super
+  void onInit() {}
+
+  @override
+  Future<void> load({bool silent = false}) async {}
+
+  @override
+  Future<void> startAutoRefresh({
+    Duration? interval,
+    Duration initialDelay = const Duration(seconds: 1),
+  }) async {}
 }

@@ -84,7 +84,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
       } else if (selectedCountry == 'Kenya' || selectedCountry == 'Uganda') {
         await _fetchCollectionDetails(); // uses current selectedMethod
       } else {
-        errorMessage = 'Funding for $selectedCountry is coming soon.';
+        errorMessage = 'Funding for $selectedCountry is currently unavailable.';
       }
     } catch (e) {
       errorMessage = e.toString();
@@ -236,7 +236,6 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                               const SizedBox(height: 10),
                               _InlineError(text: addMoneyCtrl.vaError.value!),
                             ],
-
                             if (va == null) ...[
                               const SizedBox(height: 10),
                               Text(

@@ -169,11 +169,11 @@ class _CryptoViewState extends State<CryptoView> {
                     return RefreshIndicator(
                       onRefresh: c.refreshAll,
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
                         children: [
                           _GlassCard(
-                            title: 'Your stablecoins',
-                            subtitle: 'Select asset & network',
+                            title: 'Stablecoin Vault',
+                            subtitle: 'Live balances by asset and network',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -232,18 +232,17 @@ class _CryptoViewState extends State<CryptoView> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 12),
-
                           _GlassCard(
                             title: 'Actions',
-                            subtitle: 'Receive or send crypto',
+                            subtitle: 'Move funds on the selected rail',
                             child: Row(
                               children: [
                                 Expanded(
                                   child: _ActionTile(
                                     label: 'Receive',
                                     icon: Icons.qr_code_2_rounded,
+                                    accent: const Color(0xFF10B981),
                                     onTap: () => _showCenteredDialog(
                                       context,
                                       child: ReceiveSheet(
@@ -258,7 +257,8 @@ class _CryptoViewState extends State<CryptoView> {
                                 Expanded(
                                   child: _ActionTile(
                                     label: 'Send',
-                                    icon: Icons.send_rounded,
+                                    icon: Icons.near_me_rounded,
+                                    accent: kIceBlue,
                                     onTap: () => _showCenteredDialog(
                                       context,
                                       child: SendSheet(
@@ -272,7 +272,6 @@ class _CryptoViewState extends State<CryptoView> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 12),
                           _GlassCard(
                             title: 'Recent activity',
@@ -372,28 +371,55 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-          ),
-          if (trailing != null) ...[
-            Theme(
-              data: Theme.of(context).copyWith(
-                iconTheme: const IconThemeData(color: Colors.white),
-              ),
-              child: trailing!,
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        decoration: BoxDecoration(
+          color: kCryptoSurface.withOpacity(0.90),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.22),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
             ),
           ],
-        ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: kIceBlue.withOpacity(0.14),
+                border: Border.all(color: kIceBlue.withOpacity(0.20)),
+              ),
+              child: const Icon(Icons.currency_bitcoin_rounded,
+                  color: kIceBlue, size: 21),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            if (trailing != null) ...[
+              Theme(
+                data: Theme.of(context).copyWith(
+                  iconTheme: const IconThemeData(color: Colors.white),
+                ),
+                child: trailing!,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -472,50 +498,54 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: kCryptoSurface.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.35),
-                blurRadius: 22,
-                offset: const Offset(0, 14),
-              ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              kCryptoSurface.withOpacity(0.96),
+              const Color(0xFF111C33).withOpacity(0.96),
+              const Color(0xFF08111F).withOpacity(0.98),
             ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.24),
+              blurRadius: 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
+            ),
+            if ((subtitle ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
               Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15.5,
+                subtitle!,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.64),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
                 ),
               ),
-              if ((subtitle ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.65),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              child,
             ],
-          ),
+            const SizedBox(height: 12),
+            child,
+          ],
         ),
       ),
     );
@@ -601,11 +631,13 @@ class _BalanceTile extends StatelessWidget {
 class _ActionTile extends StatelessWidget {
   final String label;
   final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
 
   const _ActionTile({
     required this.label,
     required this.icon,
+    required this.accent,
     required this.onTap,
   });
 
@@ -615,26 +647,33 @@ class _ActionTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        height: 104,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: Colors.white.withOpacity(0.06),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.055),
+              accent.withOpacity(0.14),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: accent.withOpacity(0.18)),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
-                color: kIceBlue.withOpacity(0.14),
+                color: accent.withOpacity(0.16),
                 shape: BoxShape.circle,
-                border: Border.all(color: kIceBlue.withOpacity(0.28)),
+                border: Border.all(color: accent.withOpacity(0.26)),
               ),
-              child: Icon(icon, color: Colors.white, size: 22),
+              child: Icon(icon, color: accent, size: 22),
             ),
-            const SizedBox(height: 10),
+            const Spacer(),
             Text(
               label,
               style: const TextStyle(
@@ -834,14 +873,19 @@ class _GlowBlob extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            width: size,
-            height: size,
-            color: color.withOpacity(opacity),
-          ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withOpacity(opacity),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(opacity),
+              blurRadius: 80,
+              spreadRadius: 24,
+            ),
+          ],
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:osvan_app/routes/app_routes.dart';
 import 'package:osvan_app/services/api_client.dart';
 
 class VAKycFormController extends GetxController {
@@ -153,9 +154,13 @@ class VAKycFormController extends GetxController {
           // ✅ Inline: return true; Add Money will call loadVA()
           Get.back(result: true);
         } else {
-          // Standalone success page
-          final fe = Map<String, dynamic>.from((res['fe'] ?? const {}));
-          Get.offNamed('/va/success', arguments: fe);
+          Get.snackbar(
+            'Virtual Account',
+            'Virtual account created successfully.',
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 4),
+          );
+          Get.offAllNamed(AppRoutes.main);
         }
       } else {
         final msg =

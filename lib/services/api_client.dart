@@ -12,6 +12,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:get/get.dart' hide Response;
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/services/api_error_interceptor.dart';
 import 'package:osvan_app/store/session_store.dart';
 
 /// ---- Centralized API paths (matched to server) -----------------------------
@@ -116,8 +117,6 @@ class _Api {
   static const cryptoTransfer = ApiPaths.cryptoTransfer;
   static const transferEstimate = ApiPaths.transferEstimate;
   static const transferSend = ApiPaths.transferSend;
-
-  
 }
 
 class ApiClient {
@@ -184,6 +183,7 @@ class ApiClient {
         logPrint: (obj) => debugPrint(obj.toString()),
       ));
     }
+    dio.interceptors.add(ApiErrorInterceptor(feature: 'api_client'));
 
     final store = SessionStore.instance;
     final client = ApiClient._(dio, store);
@@ -252,8 +252,8 @@ class ApiClient {
     if (code != 401 && code != 403) return false;
     final data = res.data;
     if (data is Map) {
-      final msg =
-          '${data['detail'] ?? data['message'] ?? data['error'] ?? ''}'.toLowerCase();
+      final msg = '${data['detail'] ?? data['message'] ?? data['error'] ?? ''}'
+          .toLowerCase();
       final codeStr = '${data['code'] ?? ''}'.toLowerCase();
       if (msg.contains('token') ||
           msg.contains('credential') ||
@@ -526,8 +526,38 @@ class ApiClient {
 
   // ---------- wallets ----------
   Future<List<dynamic>> listWallets() async {
-    final r = await _dio.get(_Api.wallets);
-    return List<dynamic>.from(_unwrap(r.data) as List);
+    try {
+      final r = await _dio.get(_Api.wallets);
+      final dynamic body = _unwrap(r.data);
+
+      if (body is List) return List<dynamic>.from(body);
+
+      if (body is Map) {
+        final map = Map<String, dynamic>.from(body);
+        final candidates = [
+          map['results'],
+          map['data'],
+          map['wallets'],
+          map['items'],
+        ];
+
+        for (final candidate in candidates) {
+          if (candidate is List) return List<dynamic>.from(candidate);
+        }
+
+        final message =
+            '${map['detail'] ?? map['message'] ?? map['error'] ?? ''}'
+                .toLowerCase();
+        if (message.contains('not found') || message.contains('no wallet')) {
+          return const [];
+        }
+      }
+
+      return const [];
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const [];
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> createWallet({

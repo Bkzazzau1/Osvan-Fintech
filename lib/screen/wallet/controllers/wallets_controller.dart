@@ -9,7 +9,8 @@ import '../services/wallets_service.dart';
 
 class WalletsController extends GetxController {
   // --- Local storage for persistence ---
-  final _box = GetStorage(); // requires GetStorage.init() in main()
+  GetStorage? _box; // requires GetStorage.init() in main()
+  GetStorage get _storage => _box ??= GetStorage();
 
   // --- State ---
   final wallets = <Wallet>[].obs;
@@ -23,6 +24,7 @@ class WalletsController extends GetxController {
 
   // Internal: prevent concurrent loads
   bool _busy = false;
+  bool _autoRefreshActive = false;
   Timer? _refreshTimer;
   Timer? _initialRefreshTimer;
   static const Duration _initialRefreshDelay = Duration(seconds: 1);
@@ -53,24 +55,24 @@ class WalletsController extends GetxController {
 
     try {
       // 1) Fetch current wallets
-      var list = await WalletsService.instance.fetchWallets();
+      var list = await _fetchWalletsWithRetry();
       wallets.assignAll(list);
 
       // 2) If none, bootstrap defaults (NGN, USD) and refetch once
       if (wallets.isEmpty) {
         await _ensureDefaultWallets();
-        list = await WalletsService.instance.fetchWallets();
+        list = await _fetchWalletsWithRetry();
         wallets.assignAll(list);
       } else {
         // If some exist but missing one of the defaults, create only the missing
         await _ensureMissingDefaults();
         // Optionally refetch if you want to reflect just-created wallet(s)
-        list = await WalletsService.instance.fetchWallets();
+        list = await _fetchWalletsWithRetry();
         wallets.assignAll(list);
       }
 
       // 3) Try to honor saved primary currency; else compute NGN/first
-      final saved = _box.read<String>('primary_currency') ?? '';
+      final saved = _storage.read<String>('primary_currency') ?? '';
       final savedWallet = saved.isNotEmpty ? byCode(saved) : null;
 
       if (savedWallet != null) {
@@ -79,7 +81,7 @@ class WalletsController extends GetxController {
         _computePrimary(); // NGN or first wallet
       }
     } catch (e) {
-      error.value = e.toString();
+      error.value = _friendlyError(e);
       // keep previous UI values if any
     } finally {
       if (!silent || wallets.isEmpty) {
@@ -87,6 +89,44 @@ class WalletsController extends GetxController {
       }
       _busy = false;
     }
+  }
+
+  Future<List<Wallet>> _fetchWalletsWithRetry({int attempts = 2}) async {
+    Object? lastError;
+
+    for (var i = 0; i < attempts; i++) {
+      try {
+        return await WalletsService.instance.fetchWallets();
+      } catch (e) {
+        lastError = e;
+        if (i < attempts - 1) {
+          await Future.delayed(Duration(milliseconds: 350 * (i + 1)));
+        }
+      }
+    }
+
+    throw lastError ?? Exception('Unable to load wallets');
+  }
+
+  String _friendlyError(Object e) {
+    final raw = e.toString().replaceFirst('Exception: ', '').trim();
+    final lower = raw.toLowerCase();
+
+    if (lower.contains('not found') || lower.contains('404')) {
+      return 'Wallets are still being set up. Pull down to refresh.';
+    }
+    if (lower.contains('401') ||
+        lower.contains('unauthorized') ||
+        lower.contains('credential')) {
+      return 'Your session expired. Please sign in again.';
+    }
+    if (lower.contains('timeout') ||
+        lower.contains('connection') ||
+        lower.contains('socket')) {
+      return 'Network issue while loading wallets. Pull down to retry.';
+    }
+
+    return raw.isEmpty ? 'Unable to load wallets. Pull down to retry.' : raw;
   }
 
   /// Manual refresh (e.g., pull-to-refresh)
@@ -158,7 +198,7 @@ class WalletsController extends GetxController {
     primaryBalanceText.value = _formatBalance(bal);
 
     if (persist) {
-      _box.write('primary_currency', code);
+      _storage.write('primary_currency', code);
     }
   }
 
@@ -188,11 +228,17 @@ class WalletsController extends GetxController {
     Duration? interval,
     Duration initialDelay = _initialRefreshDelay,
   }) async {
+    if (_autoRefreshActive) return;
+
     _refreshInterval = interval ?? _refreshInterval;
     _cancelTimers();
 
-    if (!await SessionStore.instance.isLoggedIn) return;
+    if (!await SessionStore.instance.isLoggedIn) {
+      _autoRefreshActive = false;
+      return;
+    }
 
+    _autoRefreshActive = true;
     await load();
 
     _initialRefreshTimer = Timer(initialDelay, () {
@@ -207,6 +253,7 @@ class WalletsController extends GetxController {
   /// Stop timers and optionally clear local state (used on logout).
   void stopAutoRefresh({bool clearState = false}) {
     _cancelTimers();
+    _autoRefreshActive = false;
     if (clearState) {
       wallets.clear();
       primaryCurrency.value = '';

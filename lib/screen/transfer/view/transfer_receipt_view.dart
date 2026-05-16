@@ -20,6 +20,9 @@ import 'package:share_plus/share_plus.dart';
 const kDarkBg = Color(0xFF070B14);
 const kPaperDark = Color(0xFF0F172A);
 const kPaperBorder = Color(0xFF1F2A44);
+const kReceiptPaper = Color(0xFFF8FAFC);
+const kReceiptInk = Color(0xFF0F172A);
+const kReceiptMuted = Color(0xFF64748B);
 
 class TransferReceiptView extends StatefulWidget {
   final Map<String, dynamic> transferData;
@@ -255,10 +258,14 @@ Amount: ${_amount.isEmpty ? '—' : _amount}
           text: 'OSVAN transfer receipt $_reference',
         );
       } else {
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Save OSVAN transfer receipt $_reference',
+        );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Receipt saved: ${file.path}'),
+            content: const Text('Use the share sheet to save the receipt.'),
             duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
@@ -312,7 +319,7 @@ Amount: ${_amount.isEmpty ? '—' : _amount}
           centerTitle: true,
           automaticallyImplyLeading: false,
           title: const Text(
-            'Receipt',
+            'Transfer Receipt',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -382,7 +389,7 @@ Amount: ${_amount.isEmpty ? '—' : _amount}
         ),
         body: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
             children: [
               // capture only the paper receipt (best for exports)
               RepaintBoundary(
@@ -485,240 +492,361 @@ class _PaperReceipt extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: kPaperDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kPaperBorder),
+        color: kReceiptPaper,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.24),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
-      child: Column(
-        children: [
-          // header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-            child: Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -42,
+              top: -42,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: statusColor.withOpacity(0.08),
+                  border: Border.all(color: statusColor.withOpacity(0.08)),
+                ),
+              ),
+            ),
+            Column(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF0F172A),
+                        Color(0xFF111C33),
+                        Color(0xFF08111F),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                   ),
-                  child: const Icon(Icons.account_balance_rounded,
-                      color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        brandTitle,
-                        style: const TextStyle(
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.10),
+                              ),
+                            ),
+                            child: const Icon(Icons.account_balance_rounded,
+                                color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  brandTitle,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.1,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.68),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.16),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: statusColor.withOpacity(0.36),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(statusIcon, color: Colors.white, size: 14),
+                                const SizedBox(width: 6),
+                                Text(
+                                  status,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(statusIcon, color: statusColor, size: 22),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              statusTitle,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          if (loading)
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(statusColor),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  child: Column(
+                    children: [
+                      if ((warning ?? '').isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706).withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFD97706).withOpacity(0.22),
+                            ),
+                          ),
+                          child: Text(
+                            warning!,
+                            style: const TextStyle(
+                              color: Color(0xFF92400E),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
                           color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.6,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Amount paid',
+                              style: TextStyle(
+                                color: kReceiptMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: FittedBox(
+                                    alignment: Alignment.centerLeft,
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      amount.isEmpty ? '-' : amount,
+                                      style: const TextStyle(
+                                        color: kReceiptInk,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 34,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (currency.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      currency,
+                                      style: const TextStyle(
+                                        color: kReceiptMuted,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 14),
+                      _ReceiptSection(
+                        title: 'Transaction details',
+                        children: [
+                          _KVLine(
+                            label: 'Reference',
+                            value: reference,
+                            strong: true,
+                            trailing: TextButton.icon(
+                              onPressed: onCopyRef,
+                              icon: const Icon(Icons.copy_rounded, size: 15),
+                              label: const Text('Copy'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF2563EB),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 34),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                          _KVLine(label: 'Timestamp', value: timestamp),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _ReceiptSection(
+                        title: 'Recipient details',
+                        children: [
+                          for (final r in rows) _KVLine(label: r.k, value: r.v),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: statusColor.withOpacity(0.12),
+                              ),
+                              child: Icon(
+                                Icons.verified_user_rounded,
+                                color: statusColor,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'This receipt was generated by Osvan. Keep the reference for support and reconciliation.',
+                                style: TextStyle(
+                                  color: kReceiptInk.withOpacity(0.72),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11.5,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       Text(
-                        subtitle,
+                        'Thank you for using Osvan',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.70),
-                          fontWeight: FontWeight.w700,
+                          color: kReceiptInk.withOpacity(0.60),
+                          fontWeight: FontWeight.w800,
                           fontSize: 12,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: statusColor.withOpacity(0.25)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, color: Colors.white, size: 14),
-                      const SizedBox(width: 6),
-                      Text(
-                        status,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11.5,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
-            ),
-          ),
-
-          Divider(
-              height: 1, thickness: 1, color: Colors.white.withOpacity(0.06)),
-
-          // status line
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Row(
-              children: [
-                Icon(statusIcon, color: statusColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    statusTitle,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13.5,
-                    ),
-                  ),
-                ),
-                if (loading)
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          if ((warning ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD97706).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: const Color(0xFFD97706).withOpacity(0.25)),
-                ),
-                child: Text(
-                  warning!,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
 
-          const SizedBox(height: 12),
+class _ReceiptSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
 
-          // amount (big and clear)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Amount',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.70),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          amount.isEmpty ? '—' : amount,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 26,
-                          ),
-                        ),
-                      ),
-                      if (currency.isNotEmpty)
-                        Text(
-                          currency,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.70),
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+  const _ReceiptSection({
+    required this.title,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: kReceiptInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // details table
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: Column(
-              children: [
-                _KVLine(label: 'Reference', value: reference, strong: true),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: onCopyRef,
-                    icon: const Icon(Icons.copy_rounded, size: 16),
-                    label: const Text('Copy'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                  ),
-                ),
-                _KVLine(label: 'Timestamp', value: timestamp),
-                Divider(
-                  height: 18,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.06),
-                ),
-                for (final r in rows) _KVLine(label: r.k, value: r.v),
-                Divider(
-                  height: 18,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.06),
-                ),
-                // footer
-                Center(
-                  child: Text(
-                    'Thank you for using Osvan',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.65),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 8),
+          ...children,
         ],
       ),
     );
@@ -729,11 +857,13 @@ class _KVLine extends StatelessWidget {
   final String label;
   final String value;
   final bool strong;
+  final Widget? trailing;
 
   const _KVLine({
     required this.label,
     required this.value,
     this.strong = false,
+    this.trailing,
   });
 
   @override
@@ -748,7 +878,7 @@ class _KVLine extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.70),
+                color: kReceiptMuted,
                 fontWeight: FontWeight.w800,
                 fontSize: 12.5,
               ),
@@ -756,14 +886,26 @@ class _KVLine extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(
-              v,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: strong ? FontWeight.w900 : FontWeight.w800,
-                fontSize: 12.8,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    v,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: kReceiptInk,
+                      fontWeight: strong ? FontWeight.w900 : FontWeight.w800,
+                      fontSize: 12.8,
+                    ),
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 6),
+                  trailing!,
+                ],
+              ],
             ),
           ),
         ],
@@ -787,37 +929,58 @@ class _ActionRow extends StatelessWidget {
 
   Widget _btn(
       BuildContext context, IconData icon, String label, VoidCallback cb) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: cb,
-        icon: Icon(icon, size: 18),
-        label: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: BorderSide(color: Colors.white.withOpacity(0.14)),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
+    return OutlinedButton.icon(
+      onPressed: cb,
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withOpacity(0.14)),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _btn(context, Icons.copy_rounded, 'Copy', onCopy),
-        const SizedBox(width: 10),
-        _btn(context, Icons.share_rounded, 'Share', onShareText),
-        const SizedBox(width: 10),
-        _btn(context, Icons.download_rounded, 'Save', onSaveImage),
-        const SizedBox(width: 10),
-        _btn(context, Icons.image_outlined, 'Image', onShareImage),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 390;
+        final buttons = [
+          _btn(context, Icons.copy_rounded, 'Copy', onCopy),
+          _btn(context, Icons.share_rounded, 'Share', onShareText),
+          _btn(context, Icons.download_rounded, 'Save', onSaveImage),
+          _btn(context, Icons.image_outlined, 'Image', onShareImage),
+        ];
+
+        if (compact) {
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: buttons
+                .map(
+                  (button) => SizedBox(
+                    width: (constraints.maxWidth - 10) / 2,
+                    child: button,
+                  ),
+                )
+                .toList(),
+          );
+        }
+
+        return Row(
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[
+              Expanded(child: buttons[i]),
+              if (i != buttons.length - 1) const SizedBox(width: 10),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -835,8 +998,8 @@ class _PrimaryCTA extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+          backgroundColor: const Color(0xFF60A5FA),
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape:

@@ -6,7 +6,6 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -32,6 +31,7 @@ class _LoginViewState extends State<LoginView> {
 
   bool _obscurePassword = true;
   bool _uiLoading = false;
+  bool _credentialsReady = false;
 
   @override
   void initState() {
@@ -40,18 +40,39 @@ class _LoginViewState extends State<LoginView> {
     final savedEmail = _box.read<String>('last_login_email') ?? '';
     if (savedEmail.isNotEmpty) _emailController.text = savedEmail;
     _passwordController.clear();
+    _emailController.addListener(_syncCredentialsReady);
+    _passwordController.addListener(_syncCredentialsReady);
+    _syncCredentialsReady();
   }
 
   @override
   void dispose() {
+    _emailController.removeListener(_syncCredentialsReady);
+    _passwordController.removeListener(_syncCredentialsReady);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  void _syncCredentialsReady() {
+    final ready = _emailController.text.trim().isNotEmpty &&
+        _passwordController.text.isNotEmpty;
+    if (ready == _credentialsReady) return;
+    setState(() => _credentialsReady = ready);
+  }
+
   Future<void> _handleLoginViaController({required bool biometric}) async {
     final auth = Get.find<AuthController>();
     if (_uiLoading || auth.isLoading.value) return;
+    if (biometric && !_credentialsReady) {
+      _snack(
+        title: 'Password required',
+        msg: 'Enter your email and password before using biometrics.',
+        bg: Colors.orange,
+        icon: Icons.lock_outline,
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     auth.errorText.value = null;
     debugPrint('[LoginView] starting login (biometric=$biometric)');
@@ -129,7 +150,6 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -147,7 +167,11 @@ class _LoginViewState extends State<LoginView> {
         height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: const [Color(0xFF0B1220), Color(0xFF111827)],
+            colors: const [
+              Color(0xFF070B14),
+              Color(0xFF0B1220),
+              Color(0xFF101827),
+            ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -156,26 +180,34 @@ class _LoginViewState extends State<LoginView> {
           children: [
             // subtle glow blobs
             Positioned(
-              top: -80,
-              left: -60,
-              child: _GlowBlob(
-                color: osvanGreen.withOpacity(.18),
-                size: 220,
-              ),
-            ),
-            Positioned(
-              bottom: -90,
-              right: -70,
+              top: -110,
+              left: -70,
               child: _GlowBlob(
                 color: const Color(0xFF60A5FA).withOpacity(.16),
                 size: 260,
+              ),
+            ),
+            Positioned(
+              top: 220,
+              right: -120,
+              child: _GlowBlob(
+                color: osvanGreen.withOpacity(.12),
+                size: 300,
+              ),
+            ),
+            Positioned(
+              bottom: -120,
+              left: -90,
+              child: _GlowBlob(
+                color: const Color(0xFFA78BFA).withOpacity(.10),
+                size: 290,
               ),
             ),
 
             Center(
               child: SingleChildScrollView(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: _GlassCard(
@@ -185,6 +217,7 @@ class _LoginViewState extends State<LoginView> {
                       formKey: _formKey,
                       obscurePassword: _obscurePassword,
                       uiLoading: _uiLoading,
+                      credentialsReady: _credentialsReady,
                       onToggleObscure: () =>
                           setState(() => _obscurePassword = !_obscurePassword),
                       onLogin: () =>
@@ -209,6 +242,7 @@ class _AuthCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final bool obscurePassword;
   final bool uiLoading;
+  final bool credentialsReady;
   final VoidCallback onToggleObscure;
   final Future<void> Function() onLogin;
   final Future<void> Function() onBiometricLogin;
@@ -219,6 +253,7 @@ class _AuthCard extends StatelessWidget {
     required this.formKey,
     required this.obscurePassword,
     required this.uiLoading,
+    required this.credentialsReady,
     required this.onToggleObscure,
     required this.onLogin,
     required this.onBiometricLogin,
@@ -230,7 +265,7 @@ class _AuthCard extends StatelessWidget {
     final auth = Get.find<AuthController>();
 
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       borderSide: BorderSide(
         color: Colors.white.withOpacity(0.10),
       ),
@@ -248,17 +283,17 @@ class _AuthCard extends StatelessWidget {
         border: border,
         enabledBorder: border,
         focusedBorder: border.copyWith(
-          borderSide: const BorderSide(color: osvanGreen, width: 1.3),
+          borderSide: const BorderSide(color: Color(0xFF60A5FA), width: 1.35),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withOpacity(0.055),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
       child: Form(
         key: formKey,
         child: Obx(() {
@@ -268,67 +303,133 @@ class _AuthCard extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Brand
-              Column(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Image.asset(
-                    'assets/logo.png',
-                    width: 160,
+                  Container(
+                    width: 56,
                     height: 56,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.account_balance_wallet_outlined,
-                      size: 52,
-                      color: (Colors.white).withOpacity(0.35),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Welcome back',
-                    style: th.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Login to continue to Osvan',
-                    style: th.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.75),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SvgPicture.asset(
-                        'assets/icons/fingerprint.svg',
-                        height: 18,
-                        width: 18,
-                        colorFilter: ColorFilter.mode(
-                          (Colors.white).withOpacity(0.35),
-                          BlendMode.srcIn,
-                        ),
-                        placeholderBuilder: (_) => Icon(
-                          Icons.fingerprint,
-                          size: 18,
-                          color: (Colors.white).withOpacity(0.35),
-                        ),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF60A5FA).withOpacity(0.95),
+                          osvanGreen.withOpacity(0.85),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Secure login ready',
-                        style: TextStyle(
-                          color: (Colors.white).withOpacity(0.45),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF60A5FA).withOpacity(0.22),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: Colors.white,
                       ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome back',
+                          style: th.textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Access your Osvan wallet securely',
+                          style: th.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withOpacity(0.66),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.055),
+                      const Color(0xFF60A5FA).withOpacity(0.10),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Row(
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/fingerprint.svg',
+                      height: 20,
+                      width: 20,
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFF60A5FA),
+                        BlendMode.srcIn,
+                      ),
+                      placeholderBuilder: (_) => const Icon(
+                        Icons.fingerprint,
+                        size: 20,
+                        color: Color(0xFF60A5FA),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        credentialsReady
+                            ? 'Biometric confirmation ready'
+                            : 'Enter password to enable biometrics',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.72),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: credentialsReady
+                            ? osvanGreen
+                            : const Color(0xFFF59E0B),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (credentialsReady
+                                    ? osvanGreen
+                                    : const Color(0xFFF59E0B))
+                                .withOpacity(0.35),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (err != null && err.trim().isNotEmpty) ...[
                 const SizedBox(height: 14),
@@ -361,7 +462,7 @@ class _AuthCard extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
 
               // Email
               TextFormField(
@@ -375,8 +476,7 @@ class _AuthCard extends StatelessWidget {
                   if (v == null || v.trim().isEmpty) {
                     return 'Please enter your email';
                   }
-                  final ok =
-                      RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim());
+                  final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim());
                   return ok ? null : 'Enter a valid email';
                 },
               ),
@@ -405,13 +505,23 @@ class _AuthCard extends StatelessWidget {
               ),
 
               const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed:
-                      showLoading ? null : () => Get.toNamed('/forgot-password'),
-                  child: const Text('Forgot password?'),
-                ),
+              Row(
+                children: [
+                  _MiniSignal(
+                    icon: credentialsReady
+                        ? Icons.fingerprint_rounded
+                        : Icons.lock_outline_rounded,
+                    label:
+                        credentialsReady ? 'Biometric ready' : 'Password first',
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: showLoading
+                        ? null
+                        : () => Get.toNamed('/forgot-password'),
+                    child: const Text('Forgot password?'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
 
@@ -422,9 +532,9 @@ class _AuthCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: showLoading ? null : onLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: osvanGreen,
+                        backgroundColor: const Color(0xFF60A5FA),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -440,21 +550,27 @@ class _AuthCard extends StatelessWidget {
                               ),
                             )
                           : const Text(
-                              'Login',
+                              'Sign in',
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Tooltip(
-                    message: 'Login with biometrics',
+                    message: credentialsReady
+                        ? 'Confirm with biometrics'
+                        : 'Enter password first',
                     child: ElevatedButton(
-                      onPressed: showLoading ? null : onBiometricLogin,
+                      onPressed: showLoading || !credentialsReady
+                          ? null
+                          : onBiometricLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.08),
+                        backgroundColor: credentialsReady
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.white.withOpacity(0.035),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.all(16),
                         shape: const CircleBorder(),
@@ -518,27 +634,68 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A).withOpacity(0.86),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.10),
-            ),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 18,
-                color: Colors.black.withOpacity(0.30),
-                offset: const Offset(0, 10),
-              ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF0F172A).withOpacity(0.96),
+              const Color(0xFF111C33).withOpacity(0.94),
+              const Color(0xFF08111F).withOpacity(0.98),
             ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          child: child,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.10),
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 22,
+              color: Colors.black.withOpacity(0.34),
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _MiniSignal extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MiniSignal({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.045),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: osvanGreen),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.72),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

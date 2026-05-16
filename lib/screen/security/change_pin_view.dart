@@ -366,8 +366,8 @@ class _ChangePinViewState extends State<ChangePinView> {
                                     ? null
                                     : () {
                                         Get.snackbar(
-                                          "Info",
-                                          "Contact support to reset your PIN (coming soon).",
+                                          "Forgot PIN",
+                                          "Please contact support@osvan.africa to reset your PIN.",
                                           snackPosition: SnackPosition.BOTTOM,
                                         );
                                       },
