@@ -46,3 +46,9 @@ app.*.map.json
 # Android signing
 android/app/upload-keystore.jks
 android/key.properties
+
+.codex_remote/
+.codex_ssh/
+
+.codex_remote/
+.codex_ssh/

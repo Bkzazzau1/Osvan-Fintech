@@ -113,9 +113,15 @@ class PayoutWizardController extends PayoutWizardBase
     throw Exception('Unable to read email from backend. Please login again.');
   }
 
-  // ✅ 1) Normalize method names (prevents GH mismatch)
+  // ✅ Normalize provider method names into app-facing values.
   String _normMethod(String v) {
     final m = v.toUpperCase().trim();
+    if (m == 'NUBAN' ||
+        m == 'BANK_ACCOUNT' ||
+        m == 'ACCOUNT' ||
+        m == 'ACCOUNT_NUMBER') {
+      return 'BANK';
+    }
     if (m == 'MOBILEMONEY' || m == 'MOBILE_MONEY') return 'MOBILE_NUMBER';
     return m;
   }
@@ -278,7 +284,9 @@ class PayoutWizardController extends PayoutWizardBase
 
         final pm = (m['paymentMethods'] is List)
             ? (m['paymentMethods'] as List)
-                .map((x) => x.toString().toUpperCase())
+                .map((x) => _normMethod(x.toString()))
+                .where((x) => x.isNotEmpty)
+                .toSet()
                 .toList()
             : <String>[];
         final methodsCsv = pm.join(',');
@@ -337,16 +345,20 @@ class PayoutWizardController extends PayoutWizardBase
     final methodsCsv = (row?['methods'] ?? '').toString();
     final ms = methodsCsv
         .split(',')
-        .map((s) => s.trim().toUpperCase())
+        .map(_normMethod)
         .where((s) => s.isNotEmpty)
+        .toSet()
         .toList();
 
     methods
       ..clear()
       ..addAll(ms.isEmpty ? const ['BANK'] : ms);
 
-    if (methods.isNotEmpty && !methods.contains(destination.value)) {
+    final currentDestination = _normMethod(destination.value);
+    if (methods.isNotEmpty && !methods.contains(currentDestination)) {
       destination.value = methods.first;
+    } else {
+      destination.value = currentDestination;
     }
 
     banks.clear();
@@ -367,7 +379,7 @@ class PayoutWizardController extends PayoutWizardBase
 
   @override
   Future<void> onSelectMethod(String method) async {
-    destination.value = method.toUpperCase().trim();
+    destination.value = _normMethod(method);
     buildFieldsFor(destination.value);
     await loadBanksIfNeeded();
 

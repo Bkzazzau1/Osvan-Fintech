@@ -1,7 +1,7 @@
 name: osvan_app
 description: Osvan fintech frontend
-publish_to: 'none'
-version: 1.0.0+2
+publish_to: "none"
+version: 1.0.0+3
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -38,8 +38,6 @@ dependencies:
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
 
- 
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -47,7 +45,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
   # ✅ Codegen toolchain for your models
- 
+
 flutter_icons:
   android: true
   ios: true

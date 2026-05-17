@@ -44,9 +44,15 @@ class PayoutsApi {
   bool _looksLikeCurrency(String s) =>
       s.isNotEmpty && s.length == 3 && RegExp(r'^[A-Z]{3}$').hasMatch(s);
 
-  // ✅ FIX 1: Normalize MOBILEMONEY variants → MOBILE_NUMBER
+  // ✅ Normalize provider method aliases into app-facing values.
   String _normalizeType(String t) {
     final v = t.toUpperCase().trim();
+    if (v == 'NUBAN' ||
+        v == 'BANK_ACCOUNT' ||
+        v == 'ACCOUNT' ||
+        v == 'ACCOUNT_NUMBER') {
+      return 'BANK';
+    }
     if (v == 'MOBILEMONEY' || v == 'MOBILE_MONEY') return 'MOBILE_NUMBER';
     return v;
   }
@@ -170,6 +176,12 @@ class PayoutsApi {
       list = raw;
     } else if (raw is Map && raw['data'] is List) {
       list = raw['data'] as List;
+    } else if (raw is Map && raw['banks'] is List) {
+      list = raw['banks'] as List;
+    } else if (raw is Map && raw['results'] is List) {
+      list = raw['results'] as List;
+    } else if (raw is Map && raw['items'] is List) {
+      list = raw['items'] as List;
     } else {
       list = const [];
     }

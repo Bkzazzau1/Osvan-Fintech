@@ -36,7 +36,8 @@ mixin PayoutBanksMixin on PayoutWizardBase {
 
   @override
   Future<void> loadBanksIfNeeded() async {
-    if (destination.value.toUpperCase() != 'BANK') {
+    final method = destination.value.toUpperCase().trim();
+    if (method != 'BANK' && method != 'NUBAN') {
       banks.clear();
       return;
     }
