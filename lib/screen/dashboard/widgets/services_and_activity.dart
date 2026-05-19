@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/routes/app_routes.dart';
 import 'package:osvan_app/screen/conversion/conversion_view.dart';
 import 'package:osvan_app/screen/crypto/view/crypto_view.dart';
@@ -46,9 +47,13 @@ class _ServicesAndActivityState extends State<ServicesAndActivity> {
       children: [
         _SectionHeading(
           title: 'Discover',
-          subtitle: 'Fast routes to cards, crypto and FX',
-          actionLabel: 'Explore',
-          onAction: () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl)),
+          subtitle: FeatureFlags.cryptoUiEnabled
+              ? 'Fast routes to cards, crypto and FX'
+              : 'Fast routes to cards, wallets and FX',
+          actionLabel: FeatureFlags.cryptoUiEnabled ? 'Explore' : 'Cards',
+          onAction: FeatureFlags.cryptoUiEnabled
+              ? () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl))
+              : () => Get.toNamed(AppRoutes.createCard),
         ),
         const SizedBox(height: 10),
         _PromoCarousel(
@@ -150,14 +155,15 @@ class _PromoCarousel extends StatelessWidget {
         accent: const Color(0xFF60A5FA),
         onTap: () => Get.toNamed(AppRoutes.createCard),
       ),
-      _Promo(
-        title: 'Crypto rails',
-        body: 'Receive and send stablecoins with network controls.',
-        cta: 'Open',
-        icon: Icons.currency_bitcoin_rounded,
-        accent: const Color(0xFFF59E0B),
-        onTap: () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl)),
-      ),
+      if (FeatureFlags.cryptoUiEnabled)
+        _Promo(
+          title: 'Crypto rails',
+          body: 'Receive and send stablecoins with network controls.',
+          cta: 'Open',
+          icon: Icons.currency_bitcoin_rounded,
+          accent: const Color(0xFFF59E0B),
+          onTap: () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl)),
+        ),
       _Promo(
         title: 'FX conversion',
         body: 'Swap wallet balances with live quotes.',

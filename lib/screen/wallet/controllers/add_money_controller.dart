@@ -53,10 +53,10 @@ class AddMoneyController extends GetxController {
         _setOk();
       } else if (s == 'PENDING') {
         va.value = null;
-        _setOk('Create your NGN virtual account to fund by bank transfer.');
+        _setOk('Create your NGN receiving account to fund by bank transfer.');
       } else if (s == 'CREATING') {
         va.value = null;
-        _setOk('Creating your virtual account…');
+        _setOk('Creating your receiving account...');
       } else if (s == 'FAILED') {
         va.value = null;
         _setErr((res['error'] ?? 'Creation failed. Tap Try Again.').toString());
@@ -64,18 +64,18 @@ class AddMoneyController extends GetxController {
     } catch (_) {
       status.value = 'PENDING';
       va.value = null;
-      _setErr('Unable to check virtual account. Pull to refresh.');
+      _setErr('Unable to check receiving account. Pull to refresh.');
     } finally {
       busy.value = false;
     }
   }
 
-  /// Explicit user action: tap "Get Virtual Account" (NGN only)
+  /// Explicit user action: tap "Get Receiving Account" (NGN only)
   Future<void> createVA({Map<String, dynamic>? kyc}) async {
     if (!isNGN) return;
 
     busy.value = true;
-    _setOk('Creating your virtual account…');
+    _setOk('Creating your receiving account...');
     try {
       // Kick off creation (returns 202 or READY)
       await _svc.createVirtualAccount(kyc: kyc);

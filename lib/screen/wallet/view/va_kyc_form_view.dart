@@ -50,7 +50,7 @@ class VAKycFormView extends GetView<VAKycFormController> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Create Virtual Account'),
+          title: const Text('Create Receiving Account'),
           centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -252,7 +252,7 @@ class VAKycFormView extends GetView<VAKycFormController> {
                   const SizedBox(height: 10),
                   _FootNote(
                     text:
-                        'We only use your information to create your virtual account with the selected bank.',
+                        'We only use your information to create your receiving account with the selected bank.',
                     isDark: isDark,
                   ),
                   const SizedBox(height: 16),

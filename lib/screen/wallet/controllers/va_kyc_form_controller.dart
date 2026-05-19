@@ -155,8 +155,8 @@ class VAKycFormController extends GetxController {
           Get.back(result: true);
         } else {
           Get.snackbar(
-            'Virtual Account',
-            'Virtual account created successfully.',
+            'Receiving Account',
+            'Receiving account created successfully.',
             snackPosition: SnackPosition.BOTTOM,
             duration: const Duration(seconds: 4),
           );
@@ -164,14 +164,14 @@ class VAKycFormController extends GetxController {
         }
       } else {
         final msg =
-            (res['message'] ?? 'Failed to create virtual account').toString();
-        Get.snackbar('Virtual Account', msg,
+            (res['message'] ?? 'Failed to create receiving account').toString();
+        Get.snackbar('Receiving Account', msg,
             snackPosition: SnackPosition.BOTTOM,
             duration: const Duration(seconds: 4));
       }
     } catch (e) {
       errorText.value = e.toString();
-      Get.snackbar('Virtual Account', errorText.value!,
+      Get.snackbar('Receiving Account', errorText.value!,
           snackPosition: SnackPosition.BOTTOM,
           duration: const Duration(seconds: 4));
     } finally {

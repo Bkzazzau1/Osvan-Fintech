@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/config/env.dart';
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/routes/app_routes.dart'; // ← use named routes
 import 'package:osvan_app/screen/conversion/conversion_view.dart';
 import 'package:osvan_app/screen/crypto/view/crypto_view.dart';
@@ -18,8 +19,9 @@ class ActionGrid extends StatelessWidget {
     final items = <_ActionItem>[
       _ActionItem('Send', Icons.near_me_rounded, const Color(0xFF10B981),
           () => Get.toNamed(AppRoutes.send)), // ← open flow entry
-      _ActionItem('Crypto', Icons.currency_bitcoin, const Color(0xFFF59E0B),
-          () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl))),
+      if (FeatureFlags.cryptoUiEnabled)
+        _ActionItem('Crypto', Icons.currency_bitcoin, const Color(0xFFF59E0B),
+            () => Get.to(() => CryptoView(baseUrl: Env.apiBaseUrl))),
       _ActionItem('Add', Icons.add_card_rounded, const Color(0xFF60A5FA),
           () => Get.to(() => const AddMoneyView())),
       _ActionItem('Convert', Icons.sync_alt_rounded, const Color(0xFFA78BFA),

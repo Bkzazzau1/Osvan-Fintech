@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/core/colors.dart';
 // NGN VA (GetX)
 import 'package:osvan_app/screen/wallet/controllers/add_money_controller.dart';
@@ -40,8 +41,11 @@ class _AddMoneyViewState extends State<AddMoneyView> {
 
   final ScrollController _scrollCtrl = ScrollController();
 
-  // Countries displayed in the selector — now NG, KE, UG
-  final countries = const ['Nigeria', 'Kenya', 'Uganda'];
+  // Countries displayed in the selector. Apple-facing UI shows only the
+  // currently supported receiving account corridor.
+  List<String> get countries => FeatureFlags.isAppleReviewSurface
+      ? const ['Nigeria']
+      : const ['Nigeria', 'Kenya', 'Uganda'];
 
   // Countries where Mobile Money may be supported
   final mobileMoneyCountries = const {'Kenya', 'Uganda'};
@@ -118,7 +122,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
   List<Map<String, String>> getCountryFields() {
     if (selectedCountry == 'Nigeria') {
       return const [
-        {'label': 'Info', 'value': 'Use the Virtual Account (NGN) card above.'},
+        {'label': 'Info', 'value': 'Use the Receiving Account (NGN) card above.'},
       ];
     }
 
@@ -204,13 +208,14 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                 children: [
                   _HeroHeader(
                     title: "Fund your wallet",
-                    subtitle:
-                        "Use bank transfer or mobile money depending on your country.",
+                    subtitle: FeatureFlags.isAppleReviewSurface
+                        ? "Use your Nigeria receiving account for NGN bank transfers."
+                        : "Use bank transfer or mobile money depending on your country.",
                     isDark: isDark,
                   ),
                   const SizedBox(height: 14),
 
-                  // ——— NGN Virtual Account (GetX) ———
+                  // ——— NGN Receiving Account (GetX) ———
                   Obx(() {
                     final show = (selectedCountry == 'Nigeria');
                     if (!show) return const SizedBox.shrink();
@@ -225,7 +230,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                           children: [
                             _SectionTitle(
                               icon: Icons.account_balance_rounded,
-                              title: 'Virtual Account (NGN)',
+                              title: 'Receiving Account (NGN)',
                               subtitle:
                                   'Fund your NGN wallet via bank transfer',
                             ),
@@ -239,7 +244,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                             if (va == null) ...[
                               const SizedBox(height: 10),
                               Text(
-                                'Create your virtual account to fund NGN wallet via bank transfer.',
+                                'Create your receiving account to fund your NGN wallet by bank transfer.',
                                 style: th.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -250,7 +255,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                                 runSpacing: 10,
                                 children: [
                                   _PrimaryButton(
-                                    text: 'Get Virtual Account',
+                                    text: 'Get Receiving Account',
                                     onPressed: () async {
                                       final ok = await Get.to<bool>(
                                         () => const VAKycFormView(),
@@ -260,7 +265,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                                         await addMoneyCtrl.loadVA();
                                         Get.snackbar(
                                           'Success',
-                                          'Virtual account created',
+                                          'Receiving account created',
                                           snackPosition: SnackPosition.BOTTOM,
                                         );
                                       }
@@ -319,12 +324,12 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                                     onPressed: addMoneyCtrl.loadVA,
                                   ),
                                   _SecondaryButton(
-                                    text: 'Copy Account Number',
+                                    text: 'Copy Receiving Account',
                                     onPressed: () {
                                       final acct = (va['account_number'] ?? '')
                                           .toString();
                                       if (acct.isNotEmpty) {
-                                        copyToClipboard('Account Number', acct);
+                                        copyToClipboard('Receiving Account', acct);
                                       }
                                     },
                                   ),
@@ -355,7 +360,9 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                           _SectionTitle(
                             icon: Icons.public_rounded,
                             title: 'Funding location',
-                            subtitle: 'Choose where you are funding from',
+                            subtitle: FeatureFlags.isAppleReviewSurface
+                                ? 'Nigeria bank transfer only'
+                                : 'Choose where you are funding from',
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
@@ -473,7 +480,7 @@ class _AddMoneyViewState extends State<AddMoneyView> {
                               const SizedBox(height: 6),
                               _FootNote(
                                 text:
-                                    'Use the Virtual Account (NGN) card above. Pull down to refresh.',
+                                    'Use the Receiving Account (NGN) card above. Pull down to refresh.',
                                 isDark: isDark,
                               ),
                             ],

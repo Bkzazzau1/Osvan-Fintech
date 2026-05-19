@@ -11,6 +11,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/services.dart';
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/controller/crypto_controller.dart';
 import 'package:osvan_app/screen/conversion/controller/conversion_controller.dart';
 import 'package:osvan_app/screen/wallet/controllers/wallets_controller.dart';
@@ -37,6 +38,9 @@ class ConversionView extends StatelessWidget {
 
     Theme.of(context);
     const isDark = true;
+    final currencyItems = FeatureFlags.cryptoUiEnabled
+        ? const ["USD", "NGN", "USDT"]
+        : const ["USD", "NGN"];
 
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
@@ -66,7 +70,7 @@ class ConversionView extends StatelessWidget {
                   _HeroHeader(
                     title: "Convert instantly",
                     subtitle:
-                        "Swap between fiat and stablecoin with transparent rates.",
+                        "Swap between wallet currencies with transparent rates.",
                     isDark: isDark,
                   ),
                   const SizedBox(height: 12),
@@ -87,7 +91,7 @@ class ConversionView extends StatelessWidget {
                             context,
                             label: "From Currency",
                             value: c.from.value,
-                            items: const ["USD", "NGN", "USDT"],
+                            items: currencyItems,
                             onChanged: (v) {
                               final nv = (v ?? c.from.value);
                               c.from.value = nv;
@@ -118,7 +122,7 @@ class ConversionView extends StatelessWidget {
                             context,
                             label: "To Currency",
                             value: c.to.value,
-                            items: const ["USD", "NGN", "USDT"],
+                            items: currencyItems,
                             onChanged: (v) {
                               final nv = (v ?? c.to.value);
                               c.to.value = nv;

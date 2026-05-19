@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/core/colors.dart';
 import 'package:osvan_app/screen/dashboard/widgets/action_grid.dart';
 import 'package:osvan_app/screen/dashboard/widgets/financial_pulse_strip.dart';
@@ -135,10 +136,12 @@ class _DashboardViewState extends State<DashboardView> {
                         const SizedBox(height: 16),
 
                         // Quick actions
-                        const SectionCard(
+                        SectionCard(
                           title: 'Quick actions',
-                          subtitle: 'Transfers, crypto, funding & conversion',
-                          child: ActionGrid(),
+                          subtitle: FeatureFlags.cryptoUiEnabled
+                              ? 'Transfers, crypto, funding & conversion'
+                              : 'Transfers, funding & conversion',
+                          child: const ActionGrid(),
                         ),
 
                         const SizedBox(height: 14),

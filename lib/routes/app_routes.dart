@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:osvan_app/config/env.dart'; // for CryptoView(baseUrl: ...)
+import 'package:osvan_app/config/feature_flags.dart';
 // Auth
 import 'package:osvan_app/screen/auth/forgot_password_view.dart';
 import 'package:osvan_app/screen/auth/login_view.dart';
@@ -145,11 +146,12 @@ class AppRoutes {
       binding: PayoutWizardBinding(),
     ),
 
-    // Crypto (no const — needs Env.apiBaseUrl at runtime)
-    GetPage(
-      name: crypto,
-      page: () => CryptoView(baseUrl: Env.apiBaseUrl),
-    ),
+    // Crypto is omitted from iOS UI builds for Apple review.
+    if (FeatureFlags.cryptoUiEnabled)
+      GetPage(
+        name: crypto,
+        page: () => CryptoView(baseUrl: Env.apiBaseUrl),
+      ),
 
     // Cards (guarded to ensure ConfigService is present)
     GetPage(

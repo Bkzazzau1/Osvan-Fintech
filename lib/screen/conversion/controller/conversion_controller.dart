@@ -1,6 +1,7 @@
 // lib/screen/conversion/controller/conversion_controller.dart
 import 'package:get/get.dart';
 // (These imports are safe even if controllers aren't registered at runtime)
+import 'package:osvan_app/config/feature_flags.dart';
 import 'package:osvan_app/controller/crypto_controller.dart';
 import 'package:osvan_app/screen/conversion/models/conversion_models.dart';
 import 'package:osvan_app/screen/conversion/services/conversion_service.dart';
@@ -26,7 +27,18 @@ class ConversionController extends GetxController {
   final lastQuote = Rxn<ConversionQuote>();
   final lastConfirm = Rxn<Map<String, dynamic>>();
 
+  @override
+  void onInit() {
+    super.onInit();
+    if (!FeatureFlags.cryptoUiEnabled) {
+      if (from.value.toUpperCase() == 'USDT') from.value = 'USD';
+      if (to.value.toUpperCase() == 'USDT') to.value = 'NGN';
+      network.value = '';
+    }
+  }
+
   bool get needsNetwork {
+    if (!FeatureFlags.cryptoUiEnabled) return false;
     final f = from.value.toUpperCase();
     final t = to.value.toUpperCase();
     return f == 'USDT' || t == 'USDT';
@@ -101,8 +113,9 @@ class ConversionController extends GetxController {
       }
 
       // Refresh crypto balances when USDT is involved
-      if (from.value.toUpperCase() == 'USDT' ||
-          to.value.toUpperCase() == 'USDT') {
+      if (FeatureFlags.cryptoUiEnabled &&
+          (from.value.toUpperCase() == 'USDT' ||
+              to.value.toUpperCase() == 'USDT')) {
         try {
           final cc = Get.find<CryptoController>();
           await cc.refreshAll();

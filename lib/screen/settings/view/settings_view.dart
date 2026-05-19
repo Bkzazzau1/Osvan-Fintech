@@ -972,7 +972,7 @@ Last updated: December 2025
 Osvan respects your privacy and is committed to protecting your personal and financial data. This explains how we collect, use, store, and protect your information.
 
 1. WHO WE ARE
-Osvan is a fintech platform providing digital wallets, virtual cards, transfers, bill payments, and stablecoin services. Osvan is not a bank. Financial services are provided through licensed partners.
+Osvan is a fintech platform providing digital wallets, virtual cards, transfers, and bill payments. Osvan is not a bank. Financial services are provided through licensed partners.
 
 2. INFORMATION WE COLLECT
 - Personal information (name, email, phone, address)
@@ -1021,8 +1021,8 @@ You are responsible for your login credentials and activity.
 3. TRANSACTIONS
 Transactions may be irreversible. Fees and rates are shown before confirmation.
 
-4. STABLECOINS
-Blockchain transactions are final. Wrong addresses may result in permanent loss.
+4. FINANCIAL SERVICES
+Transactions may be subject to partner availability, compliance checks, and network processing times.
 
 5. ACCOUNT FREEZE
 Accounts may be frozen for fraud or compliance review.
@@ -1031,7 +1031,7 @@ Accounts may be frozen for fraud or compliance review.
 Illegal activity, fraud, laundering, and sanctions violations are prohibited.
 
 7. LIABILITY
-Osvan is not liable for third-party failures or blockchain risks.
+Osvan is not liable for third-party service failures outside its reasonable control.
 
 8. GOVERNING LAW
 Governed by Nigerian law and applicable regulations.
